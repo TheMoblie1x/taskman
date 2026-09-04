@@ -37,6 +37,30 @@ const KANBAN_TOGGLE_FIELDS: { key: KanbanToggleKey; label: string }[] = [
   { key: 'showSubtasksCount', label: 'Subtasks count' },
 ];
 
+type TabId = 'appearance' | 'calendar' | 'notifications' | 'workspace' | 'account' | 'about' | 'storage';
+
+const TABS: { id: TabId; label: string; icon: string }[] = [
+  { id: 'appearance', label: 'Appearance', icon: 'palette' },
+  { id: 'calendar', label: 'Calendar', icon: 'calendar_today' },
+  { id: 'notifications', label: 'Notifications', icon: 'notifications' },
+  { id: 'workspace', label: 'Workspace', icon: 'group' },
+  { id: 'account', label: 'Account', icon: 'person' },
+  { id: 'about', label: 'About', icon: 'info' },
+  { id: 'storage', label: 'Data & Storage', icon: 'storage' },
+];
+
+type NotificationToggleKey = 'ticketAssigned' | 'mentionedInComment' | 'statusChanged' | 'dueDateApproaching' | 'overdueTicket' | 'boardInvitation' | 'calendarChanges';
+
+const NOTIFICATION_TOGGLE_FIELDS: { key: NotificationToggleKey; label: string }[] = [
+  { key: 'ticketAssigned', label: 'Ticket assigned to me' },
+  { key: 'mentionedInComment', label: 'Mentioned in comment' },
+  { key: 'statusChanged', label: 'Ticket status changed' },
+  { key: 'dueDateApproaching', label: 'Due date approaching' },
+  { key: 'overdueTicket', label: 'Overdue ticket' },
+  { key: 'boardInvitation', label: 'Board invitation' },
+  { key: 'calendarChanges', label: 'Calendar changes' },
+];
+
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   const {
     activeWorkspace,
@@ -63,6 +87,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     applyCustomTheme,
     deleteCustomTheme,
     resetAppearance,
+    notificationSettings,
+    setNotificationSettings,
+    calendarSettings,
+    setCalendarSettings,
+    setIsGuestViewer,
   } = useApp();
 
   const activeWorkspaceMembers = workspaceMembers.filter((m) => m.workspaceId === activeWorkspace?.id);
@@ -72,7 +101,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     : PRESET_THEMES[presetTheme]?.colors || PRESET_THEMES.default.colors;
   const effectiveColors = { ...baseColors, ...customColors };
 
-  const [activeTab, setActiveTab] = useState<'appearance' | 'calendar' | 'workspace' | 'storage'>('appearance');
+  const [activeTab, setActiveTab] = useState<TabId>('appearance');
   const [testSyncing, setTestSyncing] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState(false);
   const [newThemeName, setNewThemeName] = useState('');
@@ -98,6 +127,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     }
   };
 
+  const handleSignOut = () => {
+    if (confirm('Sign out of your account?')) {
+      setIsGuestViewer(true);
+      onClose();
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    alert('Account deletion requires a connected backend and is not available in this local demo.');
+  };
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-2xs">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
@@ -118,53 +158,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
         {/* Tabs */}
         <div className="flex border-b border-slate-200 bg-slate-50/50 px-6 gap-5 text-xs overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('appearance')}
-            className={`py-3 font-semibold flex items-center gap-1.5 border-b-2 transition-colors whitespace-nowrap ${
-              activeTab === 'appearance'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <GoogleIcon name="palette" size={14} />
-            <span>Appearance</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('calendar')}
-            className={`py-3 font-semibold flex items-center gap-1.5 border-b-2 transition-colors whitespace-nowrap ${
-              activeTab === 'calendar'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <GoogleIcon name="calendar_today" size={14} />
-            <span>Calendar Sync</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('workspace')}
-            className={`py-3 font-semibold flex items-center gap-1.5 border-b-2 transition-colors whitespace-nowrap ${
-              activeTab === 'workspace'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <GoogleIcon name="group" size={14} />
-            <span>Workspace & Members</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('storage')}
-            className={`py-3 font-semibold flex items-center gap-1.5 border-b-2 transition-colors whitespace-nowrap ${
-              activeTab === 'storage'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <GoogleIcon name="storage" size={14} />
-            <span>Data & Storage</span>
-          </button>
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`py-3 font-semibold flex items-center gap-1.5 border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === tab.id
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <GoogleIcon name={tab.icon} size={14} />
+              <span>{tab.label}</span>
+            </button>
+          ))}
         </div>
 
         <div className="p-6 text-xs space-y-6 max-h-[75vh] overflow-y-auto">
@@ -501,6 +508,118 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   </span>
                 )}
               </div>
+
+              {/* Sync Preferences */}
+              <div className="pt-3 border-t border-slate-200 space-y-3">
+                <h4 className="text-sm font-bold text-slate-800">Sync Preferences</h4>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600">Default calendar</span>
+                  <select
+                    value={calendarSettings.defaultProvider}
+                    onChange={(e) => setCalendarSettings({ defaultProvider: e.target.value as 'google' | 'microsoft' })}
+                    className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 font-medium"
+                  >
+                    <option value="google">Google Calendar</option>
+                    <option value="microsoft">Microsoft Outlook</option>
+                  </select>
+                </div>
+
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-slate-600">Automatically create calendar events</span>
+                  <input
+                    type="checkbox"
+                    checked={calendarSettings.autoCreateEvents}
+                    onChange={(e) => setCalendarSettings({ autoCreateEvents: e.target.checked })}
+                    className="rounded border-slate-300"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-slate-600">Sync ticket changes to calendar</span>
+                  <input
+                    type="checkbox"
+                    checked={calendarSettings.autoSyncChanges}
+                    onChange={(e) => setCalendarSettings({ autoSyncChanges: e.target.checked })}
+                    className="rounded border-slate-300"
+                  />
+                </label>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600">Default event duration</span>
+                  <select
+                    value={calendarSettings.defaultDurationMinutes}
+                    onChange={(e) => setCalendarSettings({ defaultDurationMinutes: Number(e.target.value) })}
+                    className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 font-medium"
+                  >
+                    <option value={15}>15 minutes</option>
+                    <option value={30}>30 minutes</option>
+                    <option value={60}>1 hour</option>
+                    <option value={120}>2 hours</option>
+                  </select>
+                </div>
+
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-slate-600">Remove calendar event when ticket is deleted</span>
+                  <input
+                    type="checkbox"
+                    checked={calendarSettings.removeOnTicketDelete}
+                    onChange={(e) => setCalendarSettings({ removeOnTicketDelete: e.target.checked })}
+                    className="rounded border-slate-300"
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'notifications' && (
+            <div className="space-y-5">
+              <div>
+                <h4 className="text-sm font-bold text-slate-800 mb-2">Notify me when...</h4>
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white">
+                  {NOTIFICATION_TOGGLE_FIELDS.map((field) => (
+                    <label key={field.key} className="p-2.5 flex items-center justify-between cursor-pointer hover:bg-slate-50/60">
+                      <span className="text-slate-600">{field.label}</span>
+                      <input
+                        type="checkbox"
+                        checked={notificationSettings[field.key]}
+                        onChange={(e) => setNotificationSettings({ [field.key]: e.target.checked })}
+                        className="rounded border-slate-300"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-bold text-slate-800 mb-2">Delivery channels</h4>
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white">
+                  <label className="p-2.5 flex items-center justify-between cursor-pointer hover:bg-slate-50/60">
+                    <span className="text-slate-600 flex items-center gap-1.5">
+                      <GoogleIcon name="notifications" size={13} className="text-slate-400" />
+                      In-app notifications
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={notificationSettings.inAppNotifications}
+                      onChange={(e) => setNotificationSettings({ inAppNotifications: e.target.checked })}
+                      className="rounded border-slate-300"
+                    />
+                  </label>
+                  <label className="p-2.5 flex items-center justify-between cursor-pointer hover:bg-slate-50/60">
+                    <span className="text-slate-600 flex items-center gap-1.5">
+                      <GoogleIcon name="mail" size={13} className="text-slate-400" />
+                      Email notifications
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={notificationSettings.emailNotifications}
+                      onChange={(e) => setNotificationSettings({ emailNotifications: e.target.checked })}
+                      className="rounded border-slate-300"
+                    />
+                  </label>
+                </div>
+              </div>
             </div>
           )}
 
@@ -547,6 +666,101 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'account' && (
+            <div className="space-y-5">
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-white">
+                <img src={currentUser.avatarUrl} alt="" className="w-12 h-12 rounded-full object-cover border border-slate-200" />
+                <div>
+                  <div className="font-bold text-slate-800">{currentUser.name}</div>
+                  <div className="text-[11px] text-slate-500">{currentUser.email}</div>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-bold text-slate-800 mb-2">Google Account</h4>
+                <div className="p-3 rounded-xl border border-slate-200 bg-white flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <GoogleIcon name="account_circle" size={18} className="text-slate-400" />
+                    <div>
+                      <div className="font-semibold text-slate-700">{currentUser.email}</div>
+                      <div className="text-[10px] text-slate-400">Google ID: {currentUser.googleId}</div>
+                    </div>
+                  </div>
+                  <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                    <GoogleIcon name="check_circle" size={13} /> Connected
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-bold text-slate-800 mb-2">Connected Calendars</h4>
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white">
+                  {calendarConnections.map((c) => (
+                    <div key={c.id} className="p-2.5 flex items-center justify-between">
+                      <span className="text-slate-600 capitalize flex items-center gap-1.5">
+                        <GoogleIcon name="calendar_today" size={13} className="text-slate-400" />
+                        {c.provider === 'google' ? 'Google Calendar' : 'Microsoft Outlook'}
+                      </span>
+                      <span className={c.connected ? 'text-emerald-600 font-semibold' : 'text-slate-400'}>
+                        {c.connected ? 'Connected' : 'Not connected'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-200 flex flex-col gap-2">
+                <button
+                  onClick={handleSignOut}
+                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg flex items-center justify-center gap-1.5"
+                >
+                  <GoogleIcon name="logout" size={14} />
+                  Sign Out
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold rounded-lg flex items-center justify-center gap-1.5"
+                >
+                  <GoogleIcon name="delete_forever" size={14} />
+                  Delete Account
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'about' && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-3">
+                <div>
+                  <div className="font-bold text-slate-800 text-sm">FlowKanban</div>
+                  <div className="text-[11px] text-slate-400">Version 1.0.0</div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-y-2 text-[11px]">
+                  <span className="text-slate-400 font-semibold uppercase tracking-wider">Licensed To</span>
+                  <span className="text-slate-700 font-medium text-right">{currentUser.name}</span>
+
+                  <span className="text-slate-400 font-semibold uppercase tracking-wider">License</span>
+                  <span className="text-slate-700 font-medium text-right">Professional</span>
+
+                  <span className="text-slate-400 font-semibold uppercase tracking-wider">Status</span>
+                  <span className="text-emerald-600 font-semibold text-right flex items-center justify-end gap-1">
+                    <GoogleIcon name="check_circle" size={12} /> Active
+                  </span>
+
+                  <span className="text-slate-400 font-semibold uppercase tracking-wider">Valid Until</span>
+                  <span className="text-slate-700 font-medium text-right">September 4, 2027</span>
+                </div>
+              </div>
+
+              <p className="text-[10px] text-slate-400 text-center leading-relaxed">
+                © 2026 FlowKanban. All rights reserved.
+                <br />
+                License fields shown here are placeholders pending a connected licensing service.
+              </p>
             </div>
           )}
 

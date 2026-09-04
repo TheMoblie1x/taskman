@@ -174,10 +174,36 @@ Also finished the notification workspace-scoping gap deferred at the end of Phas
 
 Verified: `npm run lint` and `npm run build` both pass clean.
 
-## Phase 4 — Account / Calendar / Notification settings + "Licensed To" — ⬜ NOT STARTED
-Data layer already exists (`INITIAL_NOTIFICATION_SETTINGS`, `INITIAL_CALENDAR_SETTINGS` in
-seedData.ts, matching `NotificationSettings`/`CalendarSettings` types) — use those as the
-canonical defaults rather than redefining them, per the Housekeeping note above.
+## Phase 4 — Account / Calendar / Notification settings + "Licensed To" — ✅ DONE (2026-09-04)
+
+Used the pre-existing `INITIAL_NOTIFICATION_SETTINGS`/`INITIAL_CALENDAR_SETTINGS` (seedData.ts)
+as the canonical defaults, per the Housekeeping note above — no duplication this time.
+
+- `AppContext.tsx`: added `notificationSettings`/`setNotificationSettings` and
+  `calendarSettings`/`setCalendarSettings` state (partial-merge setters, same pattern as
+  `kanbanCardSettings`), persisted through the existing localStorage blob, reset by
+  `resetToDefaults`.
+- `SettingsModal.tsx`: the 4-tab bar was hand-duplicated per tab (`className` block repeated
+  4 times) — refactored to a `TABS` data array + `.map()` before adding 3 more, per the
+  no-repeated-patterns rule. Added:
+  - **Calendar** (renamed from "Calendar Sync"): existing Google/Microsoft connection UI
+    unchanged, added a new "Sync Preferences" section under it — default calendar, auto-create
+    events, auto-sync changes, default event duration, remove-on-ticket-delete.
+  - **Notifications** (new tab): the 7 per-event toggles from `NotificationSettings` +
+    in-app/email delivery-channel toggles.
+  - **Account** (new tab): profile (avatar/name/email), Google account info (from
+    `currentUser.googleId`), connected-calendars summary (from `calendarConnections`), Sign
+    Out (confirms, then flips `isGuestViewer` and closes the modal — there's no real auth to
+    tear down, so this reuses the app's existing view-only mode rather than faking a log-out),
+    Delete Account (explains it needs a backend this local demo doesn't have, per the
+    requirement not to fake server-side state).
+  - **About** (new tab): the "Licensed To" section exactly as specified in requirements.txt
+    (product/version/licensed-to/license/status/valid-until/copyright), with a note that the
+    license fields are placeholders pending a real licensing service (per the requirement not
+    to hardcode license status as if it were server-verified).
+
+Verified: `npm run lint` + `npm run build` clean, and a live smoke test of all 4 new/changed
+tabs (screenshots) — correct data, working toggles, Sync Preferences wired to state.
 
 ## Phase 5 — SMART Goals feature — ⬜ NOT STARTED
 Large, self-contained feature (nav entry, creation wizard, dashboard, goal detail, milestones,

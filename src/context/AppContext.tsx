@@ -29,6 +29,8 @@ import {
   SupportedFontSize,
   KanbanCardSettings,
   CustomThemeProfile,
+  NotificationSettings,
+  CalendarSettings,
 } from '../types';
 import {
   INITIAL_USERS,
@@ -40,6 +42,8 @@ import {
   INITIAL_CALENDAR_CONNECTIONS,
   INITIAL_SHARE_LINKS,
   INITIAL_KANBAN_SETTINGS,
+  INITIAL_NOTIFICATION_SETTINGS,
+  INITIAL_CALENDAR_SETTINGS,
 } from '../data/seedData';
 import { applyThemeTokensToDOM, PRESET_THEMES } from '../utils/themeTokens';
 
@@ -136,6 +140,12 @@ interface AppContextType {
   renameCustomTheme: (id: string, name: string) => void;
   deleteCustomTheme: (id: string) => void;
   resetAppearance: () => void;
+
+  // Notification & Calendar preferences
+  notificationSettings: NotificationSettings;
+  setNotificationSettings: (settings: Partial<NotificationSettings>) => void;
+  calendarSettings: CalendarSettings;
+  setCalendarSettings: (settings: Partial<CalendarSettings>) => void;
 
   // Ticket Detail Drawer
   selectedTicketId: string | null;
@@ -243,6 +253,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [fontSize, setFontSizeState] = useState<SupportedFontSize>('medium');
   const [kanbanCardSettings, setKanbanCardSettingsState] = useState<KanbanCardSettings>(INITIAL_KANBAN_SETTINGS);
   const [customThemeProfiles, setCustomThemeProfiles] = useState<CustomThemeProfile[]>([]);
+
+  // Notification & Calendar preferences
+  const [notificationSettings, setNotificationSettingsState] = useState<NotificationSettings>(INITIAL_NOTIFICATION_SETTINGS);
+  const [calendarSettings, setCalendarSettingsState] = useState<CalendarSettings>(INITIAL_CALENDAR_SETTINGS);
+
+  const setNotificationSettings = useCallback((settings: Partial<NotificationSettings>) => {
+    setNotificationSettingsState((prev) => ({ ...prev, ...settings }));
+  }, []);
+
+  const setCalendarSettings = useCallback((settings: Partial<CalendarSettings>) => {
+    setCalendarSettingsState((prev) => ({ ...prev, ...settings }));
+  }, []);
 
   const setTheme = useCallback((mode: ThemeMode) => {
     setThemeState(mode);
@@ -391,6 +413,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (data.fontSize) setFontSizeState(data.fontSize);
         if (data.kanbanCardSettings) setKanbanCardSettingsState({ ...INITIAL_KANBAN_SETTINGS, ...data.kanbanCardSettings });
         if (data.customThemeProfiles) setCustomThemeProfiles(data.customThemeProfiles);
+        if (data.notificationSettings) setNotificationSettingsState({ ...INITIAL_NOTIFICATION_SETTINGS, ...data.notificationSettings });
+        if (data.calendarSettings) setCalendarSettingsState({ ...INITIAL_CALENDAR_SETTINGS, ...data.calendarSettings });
       }
     } catch (e) {
       console.warn('Could not load stored state:', e);
@@ -443,6 +467,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         fontSize,
         kanbanCardSettings,
         customThemeProfiles,
+        notificationSettings,
+        calendarSettings,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
     } catch (e) {
@@ -467,6 +493,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     fontSize,
     kanbanCardSettings,
     customThemeProfiles,
+    notificationSettings,
+    calendarSettings,
   ]);
 
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) || workspaces[0];
@@ -1171,6 +1199,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsGuestViewer(false);
     resetAppearance();
     setCustomThemeProfiles([]);
+    setNotificationSettingsState(INITIAL_NOTIFICATION_SETTINGS);
+    setCalendarSettingsState(INITIAL_CALENDAR_SETTINGS);
   }, [resetAppearance]);
 
   return (
@@ -1231,6 +1261,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         renameCustomTheme,
         deleteCustomTheme,
         resetAppearance,
+        notificationSettings,
+        setNotificationSettings,
+        calendarSettings,
+        setCalendarSettings,
         selectedTicketId,
         selectedTicket,
         setSelectedTicketId,
