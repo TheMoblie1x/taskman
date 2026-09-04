@@ -1,0 +1,6 @@
+{
+  "name": "Collaborative Task & Kanban Platform",
+  "description": "A streamlined Jira and Kanban task management platform with workspaces, sprint columns, calendar integration, subtasks, and real-time collaboration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

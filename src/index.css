@@ -1,0 +1,150 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --bg: #F8FAFC;
+  --sidebar: #FFFFFF;
+  --header: #FFFFFF;
+  --border: #E2E8F0;
+  --border-subtle: #F1F5F9;
+  --text-main: #0F172A;
+  --text-muted: #64748B;
+  --accent: #2563EB;
+  --accent-hover: #1D4ED8;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+
+.dark {
+  --bg: #0B0F19;
+  --sidebar: #0F172A;
+  --header: #0F172A;
+  --border: #1E293B;
+  --border-subtle: #1E293B;
+  --text-main: #F1F5F9;
+  --text-muted: #94A3B8;
+  --accent: #3B82F6;
+  --accent-hover: #60A5FA;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    transition: background-color 0.25s cubic-bezier(0.16, 1, 0.3, 1), color 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    color: var(--text-main);
+    background-color: var(--bg);
+    letter-spacing: -0.01em;
+  }
+}
+
+/* High Density Component Layout Classes */
+.kanban-column {
+  background-color: #f1f5f9;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+.dark .kanban-column {
+  background-color: #111827;
+  border-color: #1f2937;
+}
+
+.card {
+  background-color: #ffffff;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.15s ease;
+}
+
+.card:hover {
+  border-color: #94a3b8;
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.06);
+}
+
+.dark .card {
+  background-color: #1e293b;
+  border-color: #334155;
+  color: #f8fafc;
+}
+
+.dark .card:hover {
+  border-color: #475569;
+  box-shadow: 0 6px 16px -2px rgba(0, 0, 0, 0.35);
+}
+
+.sidebar {
+  background-color: var(--sidebar);
+  border-right: 1px solid var(--border);
+}
+
+.dark .sidebar {
+  background-color: #0f172a;
+  border-right-color: #1e293b;
+}
+
+/* High Density Form Inputs & Buttons */
+input, select, textarea {
+  font-size: 0.75rem; /* 12px */
+  line-height: 1rem;
+}
+
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #1e293b;
+  color: #f8fafc;
+  border-color: #334155;
+}
+
+/* Ultra-slim high density scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Density Mode Rules */
+[data-density="compact"] .density-card {
+  padding: 0.5rem 0.625rem;
+}
+
+[data-density="comfortable"] .density-card {
+  padding: 0.875rem 1rem;
+}
+
+[data-density="comfortable"] input,
+[data-density="comfortable"] select,
+[data-density="comfortable"] textarea {
+  font-size: 0.8125rem; /* 13px */
+  line-height: 1.25rem;
+}
+
+
+
