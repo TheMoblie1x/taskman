@@ -12,6 +12,7 @@ import {
   KanbanCardSettings,
   NotificationSettings,
   CalendarSettings,
+  DocPage,
 } from '../types';
 
 export const INITIAL_USERS: User[] = [
@@ -958,5 +959,45 @@ export const INITIAL_SHARE_LINKS: ShareLink[] = [
     createdBy: 'usr_rahul',
     isActive: true,
     createdAt: '2026-09-01T12:00:00.000Z',
+  },
+];
+
+export const INITIAL_DOC_PAGES: DocPage[] = [
+  {
+    id: 'doc_onboarding',
+    workspaceId: 'ws_rahul_work',
+    icon: '👋',
+    title: 'Team Onboarding',
+    content:
+      '# Welcome to the Work Workspace\n\nThis is the shared wiki for the team — use it for anything that should outlive a single ticket: architecture notes, decisions, runbooks, onboarding steps.\n\n## Getting set up\n\n- Clone the Android App repo and follow the README\n- Ask in #eng for access to the staging environment\n- Read the [BLE Architecture](#) page before touching the Bluetooth stack\n\n## Conventions\n\n- **Tickets** track work; this **wiki** tracks knowledge\n- Prefer linking a ticket to a doc page over duplicating context in both places',
+    createdBy: 'usr_rahul',
+    updatedBy: 'usr_rahul',
+    createdAt: '2026-08-02T09:00:00.000Z',
+    updatedAt: '2026-09-01T10:00:00.000Z',
+  },
+  {
+    id: 'doc_ble_arch',
+    workspaceId: 'ws_rahul_work',
+    projectId: 'proj_android',
+    icon: '📡',
+    title: 'BLE Architecture',
+    content:
+      '# Bluetooth LE Architecture\n\nCovers the GATT connection lifecycle used across the Android app.\n\n## Connection flow\n\n1. Scan for nearby peripherals\n2. Connect and discover services\n3. Subscribe to characteristic notifications\n4. Handle reconnection with exponential backoff\n\n## Known issues\n\n- Android 14 power-saving mode can drop connections after ~30s — see AND-142\n- Some OEM Bluetooth stacks require a delay before service discovery\n\n```\nGATT_SUCCESS -> discoverServices() -> onServicesDiscovered()\n```',
+    createdBy: 'usr_john',
+    updatedBy: 'usr_rahul',
+    createdAt: '2026-08-20T14:00:00.000Z',
+    updatedAt: '2026-09-03T11:00:00.000Z',
+  },
+  {
+    id: 'doc_release_process',
+    workspaceId: 'ws_rahul_work',
+    icon: '🚀',
+    title: 'Release Process',
+    content:
+      '# Release Checklist\n\n1. Bump version code and name\n2. Run full regression suite\n3. Generate signed AAB\n4. Deploy to internal testing track\n5. Staged rollout: 10% → 50% → 100%\n\n*Freeze feature work 2 days before a scheduled release.*',
+    createdBy: 'usr_rahul',
+    updatedBy: 'usr_rahul',
+    createdAt: '2026-08-25T09:00:00.000Z',
+    updatedAt: '2026-08-30T09:00:00.000Z',
   },
 ];

@@ -11,9 +11,9 @@ rules_version = '2';
 // your own membership, or extend one if you're already an owner/admin" is real per-row ACL
 // logic and a bigger change. `workspaces`/`projects`/`boards`/`users`/`shareLinks`/
 // `calendarConnections` are also just "any signed-in user" for the same reason: boards/projects
-// don't carry a workspaceId field to check against directly. `tickets`/`goals`/`notifications`
-// (the collections people actually read/write while using a workspace) get the real
-// membership check below, which is the part that matters most for genuine multi-user use.
+// don't carry a workspaceId field to check against directly. `tickets`/`goals`/`docPages`/
+// `notifications` (the collections people actually read/write while using a workspace) get the
+// real membership check below, which is the part that matters most for genuine multi-user use.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() {
@@ -32,6 +32,11 @@ service cloud.firestore {
     }
 
     match /goals/{goalId} {
+      allow read, update, delete: if isWorkspaceMember(resource.data.workspaceId);
+      allow create: if isWorkspaceMember(request.resource.data.workspaceId);
+    }
+
+    match /docPages/{pageId} {
       allow read, update, delete: if isWorkspaceMember(resource.data.workspaceId);
       allow create: if isWorkspaceMember(request.resource.data.workspaceId);
     }

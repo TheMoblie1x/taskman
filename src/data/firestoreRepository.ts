@@ -41,6 +41,7 @@ import {
   AppNotification,
   ShareLink,
   CalendarConnection,
+  DocPage,
 } from '../types';
 
 // Fields persisted on users/{userId} beyond the base profile — everything the Settings
@@ -214,6 +215,18 @@ export const updateGoalDoc = (goalId: string, updates: Partial<Goal>) =>
   updateDoc(doc(requireDb(), 'goals', goalId), updates as DocumentData);
 export const deleteGoalDoc = (goalId: string) => deleteDoc(doc(requireDb(), 'goals', goalId));
 
+// ---- Docs (workspace wiki) ----
+export const subscribeWorkspaceDocPages = (
+  workspaceId: string,
+  onData: (rows: DocPage[]) => void,
+  onError?: (e: unknown) => void
+) => subscribeCollection<DocPage>('docPages', [where('workspaceId', '==', workspaceId)], onData, onError);
+
+export const saveDocPage = (page: DocPage) => setDoc(doc(requireDb(), 'docPages', page.id), page);
+export const updateDocPageDoc = (pageId: string, updates: Partial<DocPage>) =>
+  updateDoc(doc(requireDb(), 'docPages', pageId), updates as DocumentData);
+export const deleteDocPageDoc = (pageId: string) => deleteDoc(doc(requireDb(), 'docPages', pageId));
+
 // ---- Notifications ----
 export const subscribeWorkspaceNotifications = (
   workspaceId: string,
@@ -255,6 +268,7 @@ export async function seedFirestoreIfEmpty(seed: {
   boards: Board[];
   tickets: Ticket[];
   goals: Goal[];
+  docPages: DocPage[];
   notifications: AppNotification[];
   shareLinks: ShareLink[];
   calendarConnections: CalendarConnection[];
@@ -272,6 +286,7 @@ export async function seedFirestoreIfEmpty(seed: {
     ...seed.boards.map((b) => ({ col: 'boards', id: b.id, data: b as DocumentData })),
     ...seed.tickets.map((t) => ({ col: 'tickets', id: t.id, data: t as DocumentData })),
     ...seed.goals.map((g) => ({ col: 'goals', id: g.id, data: g as DocumentData })),
+    ...seed.docPages.map((d) => ({ col: 'docPages', id: d.id, data: d as DocumentData })),
     ...seed.notifications.map((n) => ({ col: 'notifications', id: n.id, data: n as DocumentData })),
     ...seed.shareLinks.map((s) => ({ col: 'shareLinks', id: s.id, data: s as DocumentData })),
     ...seed.calendarConnections.map((c) => ({ col: 'calendarConnections', id: c.id, data: c as DocumentData })),

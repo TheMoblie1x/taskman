@@ -35,6 +35,7 @@ import {
   GoalMilestone,
   GoalCheckIn,
   GoalMeasurementType,
+  DocPage,
 } from '../types';
 import {
   INITIAL_USERS,
@@ -49,6 +50,7 @@ import {
   INITIAL_NOTIFICATION_SETTINGS,
   INITIAL_CALENDAR_SETTINGS,
   INITIAL_GOALS,
+  INITIAL_DOC_PAGES,
 } from '../data/seedData';
 import { applyThemeTokensToDOM, PRESET_THEMES } from '../utils/themeTokens';
 import { calculateGoalHealth, calculateGoalProgress, isGoalProgressDerived } from '../utils/goalUtils';
@@ -146,6 +148,13 @@ interface AppContextType {
   addGoalCheckIn: (goalId: string, data: { progressValue: number; notes: string; blockers?: string; nextStep?: string }) => void;
   linkTicketToGoal: (goalId: string, ticketId: string) => void;
   unlinkTicketFromGoal: (goalId: string, ticketId: string) => void;
+
+  // Docs (workspace wiki)
+  docPages: DocPage[];
+  workspaceDocPages: DocPage[];
+  createDocPage: (data: { title: string; content?: string; projectId?: string | null; icon?: string }) => DocPage;
+  updateDocPage: (pageId: string, updates: Partial<Pick<DocPage, 'title' | 'content' | 'projectId' | 'icon'>>) => void;
+  deleteDocPage: (pageId: string) => void;
 
   // Multi-select on Kanban
   selectedTicketIds: string[];
@@ -270,6 +279,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [boards, setBoards] = useState<Board[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [docPages, setDocPages] = useState<DocPage[]>([]);
 
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>('kanban');
@@ -617,6 +627,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ]);
       setTickets(INITIAL_TICKETS);
       setGoals(INITIAL_GOALS);
+      setDocPages(INITIAL_DOC_PAGES);
       setNotifications(INITIAL_NOTIFICATIONS);
       return;
     }
@@ -644,6 +655,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           boards: INITIAL_BOARDS,
           tickets: INITIAL_TICKETS,
           goals: INITIAL_GOALS,
+          docPages: INITIAL_DOC_PAGES,
           notifications: INITIAL_NOTIFICATIONS,
           shareLinks: INITIAL_SHARE_LINKS,
           calendarConnections: INITIAL_CALENDAR_CONNECTIONS,
@@ -685,12 +697,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubMembers = repo.subscribeWorkspaceMembers(activeWorkspaceId, setWorkspaceMembers);
     const unsubTickets = repo.subscribeWorkspaceTickets(activeWorkspaceId, setTickets);
     const unsubGoals = repo.subscribeWorkspaceGoals(activeWorkspaceId, setGoals);
+    const unsubDocPages = repo.subscribeWorkspaceDocPages(activeWorkspaceId, setDocPages);
     const unsubNotifications = repo.subscribeWorkspaceNotifications(activeWorkspaceId, setNotifications);
 
     return () => {
       unsubMembers();
       unsubTickets();
       unsubGoals();
+      unsubDocPages();
       unsubNotifications();
     };
   }, [activeWorkspaceId, authUser?.uid]);
@@ -710,6 +724,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const workspaceTickets = tickets.filter((t) => workspaceProjectIds.has(t.projectId));
   const workspaceNotifications = notifications.filter((n) => n.workspaceId === activeWorkspace.id);
   const workspaceGoals = goals.filter((g) => g.workspaceId === activeWorkspace.id);
+  const workspaceDocPages = docPages.filter((d) => d.workspaceId === activeWorkspace.id);
 
   const activeProject = workspaceProjects.find((p) => p.id === activeProjectId) || workspaceProjects[0] || null;
   const activeBoard = activeProject ? boards.find((b) => b.projectId === activeProject.id) || null : null;
@@ -1382,6 +1397,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [goals, updateGoal]
   );
 
+  // ---- Docs (workspace wiki) ----
+  const createDocPage = useCallback(
+    (data: { title: string; content?: string; projectId?: string | null; icon?: string }) => {
+      const now = new Date().toISOString();
+      const newPage: DocPage = {
+        id: `doc_${Date.now()}`,
+        workspaceId: activeWorkspace.id,
+        projectId: data.projectId ?? null,
+        title: data.title,
+        content: data.content || '',
+        icon: data.icon,
+        createdBy: currentUser.id,
+        updatedBy: currentUser.id,
+        createdAt: now,
+        updatedAt: now,
+      };
+      setDocPages((prev) => [newPage, ...prev]);
+      if (isFirebaseConfigured) repo.saveDocPage(newPage).catch((e) => console.error('saveDocPage failed:', e));
+      return newPage;
+    },
+    [activeWorkspace.id, currentUser.id]
+  );
+
+  const updateDocPage = useCallback(
+    (pageId: string, updates: Partial<Pick<DocPage, 'title' | 'content' | 'projectId' | 'icon'>>) => {
+      const page = docPages.find((d) => d.id === pageId);
+      if (!page) return;
+      const updated: DocPage = { ...page, ...updates, updatedBy: currentUser.id, updatedAt: new Date().toISOString() };
+      setDocPages((prev) => prev.map((d) => (d.id === pageId ? updated : d)));
+      if (isFirebaseConfigured) repo.updateDocPageDoc(pageId, updated).catch((e) => console.error('updateDocPageDoc failed:', e));
+    },
+    [docPages, currentUser.id]
+  );
+
+  const deleteDocPage = useCallback((pageId: string) => {
+    setDocPages((prev) => prev.filter((d) => d.id !== pageId));
+    if (isFirebaseConfigured) repo.deleteDocPageDoc(pageId).catch((e) => console.error('deleteDocPageDoc failed:', e));
+  }, []);
+
   // Subtasks
   const addSubtask = useCallback(
     (ticketId: string, title: string) => {
@@ -1681,6 +1735,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addGoalCheckIn,
         linkTicketToGoal,
         unlinkTicketFromGoal,
+        docPages,
+        workspaceDocPages,
+        createDocPage,
+        updateDocPage,
+        deleteDocPage,
         selectedTicketIds,
         setSelectedTicketIds,
         toggleTicketSelection,

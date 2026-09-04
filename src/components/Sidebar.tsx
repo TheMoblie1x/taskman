@@ -130,6 +130,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </button>
 
               <button
+                id="sidebar-docs-btn"
+                onClick={() => {
+                  setActiveView('docs');
+                  if (window.innerWidth < 768) onToggle();
+                }}
+                className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-xs font-semibold transition-colors ${
+                  activeView === 'docs'
+                    ? 'bg-blue-50 text-blue-700'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <GoogleIcon name="description" size={14} className={`${activeView === 'docs' ? 'text-blue-600' : 'text-slate-400'}`} />
+                  <span>Docs</span>
+                </div>
+              </button>
+
+              <button
                 id="sidebar-calendar-view-btn"
                 onClick={() => {
                   setActiveView('calendar');

@@ -17,6 +17,7 @@ import { CreateGoalModal } from './components/CreateGoalModal';
 import { GoalDetailModal } from './components/GoalDetailModal';
 import { LoginScreen } from './components/LoginScreen';
 import { GoogleIcon } from './components/GoogleIcon';
+import { DocsView } from './components/DocsView';
 
 const AppContent: React.FC = () => {
   const { activeView, setActiveView, selectedTicketId } = useApp();
@@ -60,6 +61,8 @@ const AppContent: React.FC = () => {
           setActiveView('my-tasks');
         } else if (e.key === '5') {
           setActiveView('goals');
+        } else if (e.key === '6') {
+          setActiveView('docs');
         }
       }
     };
@@ -122,6 +125,8 @@ const AppContent: React.FC = () => {
               onOpenGoal={(goalId) => setSelectedGoalId(goalId)}
             />
           )}
+
+          {activeView === 'docs' && <DocsView />}
         </main>
       </div>
 

@@ -157,5 +157,25 @@ input, select, textarea {
   line-height: 1.5rem;
 }
 
+/* Rendered markdown in the Docs wiki (DocsView) — the raw HTML marked/DOMPurify produce has
+   no styling of its own beyond browser defaults, which don't match the app's density or type
+   scale, so this is scoped narrowly to that one rendered-output container. */
+.prose-docs h1 { font-size: 1.25rem; font-weight: 700; margin: 1.25rem 0 0.5rem; color: var(--text-main); }
+.prose-docs h2 { font-size: 1.05rem; font-weight: 700; margin: 1.1rem 0 0.4rem; color: var(--text-main); }
+.prose-docs h3 { font-size: 0.9rem; font-weight: 600; margin: 1rem 0 0.35rem; color: var(--text-main); }
+.prose-docs h1:first-child, .prose-docs h2:first-child, .prose-docs h3:first-child { margin-top: 0; }
+.prose-docs p { margin: 0.6rem 0; }
+.prose-docs ul, .prose-docs ol { margin: 0.5rem 0; padding-left: 1.25rem; }
+.prose-docs ul { list-style: disc; }
+.prose-docs ol { list-style: decimal; }
+.prose-docs li { margin: 0.2rem 0; }
+.prose-docs a { color: var(--accent); text-decoration: underline; }
+.prose-docs strong { font-weight: 700; color: var(--text-main); }
+.prose-docs code { font-family: var(--font-mono); background: var(--kanban-column); padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.85em; }
+.prose-docs pre { background: var(--kanban-column); padding: 0.75rem; border-radius: 8px; overflow-x: auto; margin: 0.6rem 0; }
+.prose-docs pre code { background: none; padding: 0; }
+.prose-docs blockquote { border-left: 3px solid var(--border); padding-left: 0.75rem; color: var(--text-muted); margin: 0.6rem 0; }
+.prose-docs hr { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+
 
 

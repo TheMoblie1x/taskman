@@ -422,17 +422,46 @@ this Firebase project (no extra console step needed, unlike Anonymous auth earli
 
 Verified: `npm run lint` + `npm run build` clean.
 
-**Documentation portal (in-app workspace wiki) — not started yet.** Scoped with the user as a
-separate, real-time-synced Firestore collection of workspace pages, linkable from projects/
-goals/tickets. Next up.
+**Documentation portal (in-app workspace wiki) — done.** A real-time-synced Firestore
+collection (`docPages`) of workspace wiki pages, written in Markdown, optionally scoped to a
+project via `projectId` (filterable in the UI; the reciprocal "related docs" section on
+tickets/goals was scoped but not built — see open items below).
+
+- `types.ts`: `DocPage` type; `ActiveView` extended with `'docs'`.
+- `firestoreRepository.ts`: `subscribeWorkspaceDocPages`, `saveDocPage`, `updateDocPageDoc`,
+  `deleteDocPageDoc`; `docPages` included in `seedFirestoreIfEmpty`.
+- `AppContext.tsx`: `docPages` state, workspace-scoped subscription (torn down on workspace
+  switch like tickets/goals/notifications), local-mode seed fallback, `workspaceDocPages`
+  derived selector, and `createDocPage`/`updateDocPage`/`deleteDocPage` CRUD (local state +
+  Firestore write side by side, same pattern as the rest of the app).
+- `DocsView.tsx` (new): two-pane wiki UI — page list (project filter, new-page button) and an
+  editor pane with Edit/Preview toggle. Markdown is rendered via `marked` + sanitized via
+  `dompurify` (`utils/markdown.ts`) before being injected as HTML, styled by a new `.prose-docs`
+  block in `index.css` built from the app's existing theme CSS vars (so it respects light/dark
+  and the accent color like everything else).
+  Routed into `App.tsx` (`activeView === 'docs'`), added to `Sidebar.tsx` nav (between Goals and
+  Calendar), and given the `6` keyboard shortcut (`ShortcutsModal.tsx` updated to list `5` and
+  `6`, closing a pre-existing gap where Goals' `5` shortcut wasn't documented either).
+- `firestore.rules`: `docPages` given the same `isWorkspaceMember` real-membership check as
+  `tickets`/`goals`/`notifications`.
+
+Verified: `npm run lint` + `npm run build` clean; production build served locally and returned
+200 with the correct page shell. (Live click-through in an actual browser was not possible this
+session — no browser automation available — so create/edit/preview/delete/project-filter should
+get a quick manual pass by the user.)
+
+**Still needed from the user:** the updated `firestore.rules` above (with the new `docPages`
+block) has NOT been published yet — republish it in Console > Firestore Database > Rules, the
+same way the Auth-only version was published earlier.
 
 ---
-All 6 phases from REQUIREMENTS.md are done, plus real Google Sign-In (above). Known open items
-for future work, not tracked as phases here: the in-app documentation/wiki portal (scoped,
-not started), tightening `workspaceMembers`/`workspaces`/`projects`/`boards` to real per-row
-ACLs instead of "any signed-in user" (see the Auth section's documented simplification), and
-syncing appearance/notification/calendar settings to Firestore (`users/{id}`) instead of
-localStorage for cross-device settings sync.
+All 6 phases from REQUIREMENTS.md are done, plus real Google Sign-In and the documentation
+portal (both above). Known open items for future work, not tracked as phases here: tightening
+`workspaceMembers`/`workspaces`/`projects`/`boards` to real per-row ACLs instead of "any
+signed-in user" (see the Auth section's documented simplification), syncing appearance/
+notification/calendar settings to Firestore (`users/{id}`) instead of localStorage for
+cross-device settings sync, and a "related docs" section on tickets/goals linking back to
+`DocPage`s scoped to the same project.
 
 ### How to resume (if more work comes up)
 1. Read this file.

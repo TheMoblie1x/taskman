@@ -185,7 +185,7 @@ export interface AppNotification {
   createdAt: string;
 }
 
-export type ActiveView = 'kanban' | 'list' | 'calendar' | 'my-tasks' | 'goals' | 'settings';
+export type ActiveView = 'kanban' | 'list' | 'calendar' | 'my-tasks' | 'goals' | 'docs' | 'settings';
 
 export type DensityMode = 'compact' | 'comfortable' | 'spacious';
 
@@ -326,4 +326,18 @@ export interface Goal {
   createdAt: string;
   updatedAt: string;
   completedAt?: string | null;
+}
+
+// Documentation portal (workspace wiki)
+export interface DocPage {
+  id: string;
+  workspaceId: string;
+  projectId?: string | null; // optional — lets a page show up on a project's context
+  title: string;
+  content: string; // markdown source
+  icon?: string; // single emoji, shown in the page list
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
 }
