@@ -327,6 +327,32 @@ this machine's Chrome, none has permission on `taskman-1c28f`) — so the user d
 Collaborative data (workspaces/projects/boards/tickets/goals/members/notifications/share
 links/calendar connections) is now genuinely live in Firestore, real-time, and workspace-scoped.
 
+## Post-launch fix — dark theme / text color conflicts (2026-09-05)
+
+User reported the deployed dark theme looked "pathetic" (screenshot: page background, Kanban
+columns, and chrome all rendering as inconsistent, barely-distinguishable near-black tones).
+Root cause in `applyThemeTokensToDOM` (`themeTokens.ts`): the `.dark` class (which drives every
+hardcoded `dark:*` Tailwind class throughout components) was computed from `themeMode`
+independently of which preset's colors got pushed into the CSS custom properties (`--bg`,
+`--card`, `--sidebar`, ...) — computed purely from `presetTheme`. Whenever those two disagreed
+(e.g. `themeMode: 'dark'` with `presetTheme: 'default'`, a *light* preset — the most likely path
+for a first-time visitor whose OS is in dark mode, since the app defaults to the 'default'
+preset regardless of resolved dark/light), the CSS-var-driven surfaces (body background, cards,
+sidebar) rendered a mismatched preset's colors while everything using literal `dark:` Tailwind
+classes rendered correctly dark — a three-way visual clash. Separately, `--kanban-column` was
+never set by this function at all, so Kanban columns were permanently stuck on `index.css`'s
+plain light/dark default, decoupled from the preset/custom colors entirely.
+
+Fixed both in `themeTokens.ts`: `baseColors` now only uses the selected preset's colors when
+that preset's own `mode` actually matches the resolved `isDark`; otherwise it falls back to a
+same-mode baseline (`midnight` for dark, `default` for light). `--kanban-column` is now set
+every time, reusing `mergedColors.sidebar` (no dedicated field for it in `CustomColors`, and
+sidebar is a similar "recessed panel" tone in every preset).
+
+Verified: `npm run lint` + `npm run build` clean. **Not yet re-verified live in the browser** —
+the Chrome extension was disconnected when this was fixed; ask for a visual re-check next time
+dark mode comes up, or if this recurs.
+
 ---
 All 6 phases from REQUIREMENTS.md are done. Known open items for future work, not tracked as
 phases here: real Firebase Auth (Google Sign-In) to replace the persona switcher so Firestore

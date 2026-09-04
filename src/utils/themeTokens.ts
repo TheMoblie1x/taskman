@@ -160,10 +160,20 @@ export function applyThemeTokensToDOM(
     root.removeAttribute('data-high-contrast');
   }
 
+  // The selected preset's own colors only make sense when its light/dark-ness actually
+  // matches `isDark` (e.g. themeMode='dark' but preset='default', a light preset — or
+  // preset='midnight' left selected from a previous dark session while themeMode='light').
+  // Using a mismatched preset's colors while `.dark` (or its absence) drives every hardcoded
+  // `dark:` Tailwind class elsewhere is exactly what produced the "text coloring conflict" —
+  // some surfaces reading the (wrong) preset colors, others reading the (correct) .dark
+  // class — so fall back to a same-mode baseline preset instead of a mismatched one.
+  const presetMatchesMode = PRESET_THEMES[preset] && (PRESET_THEMES[preset].mode === 'dark') === isDark;
   const baseColors =
     themeMode === 'high_contrast'
       ? HIGH_CONTRAST_COLORS
-      : PRESET_THEMES[preset]?.colors || PRESET_THEMES.default.colors;
+      : presetMatchesMode
+      ? PRESET_THEMES[preset].colors
+      : (isDark ? PRESET_THEMES.midnight.colors : PRESET_THEMES.default.colors);
 
   const mergedColors: CustomColors = {
     ...baseColors,
@@ -177,6 +187,11 @@ export function applyThemeTokensToDOM(
   root.style.setProperty('--bg', mergedColors.background);
   root.style.setProperty('--sidebar', mergedColors.sidebar);
   root.style.setProperty('--card', mergedColors.card);
+  // Kanban column background has no dedicated CustomColors field — reuse `sidebar` (also a
+  // "recessed panel" tone in every preset) instead of leaving this permanently unthemed,
+  // which was the other half of the same bug: --kanban-column previously always came from
+  // index.css's plain :root/.dark values, never from the active preset/custom colors at all.
+  root.style.setProperty('--kanban-column', mergedColors.sidebar);
   root.style.setProperty('--header', mergedColors.header);
   root.style.setProperty('--text-main', mergedColors.text);
   root.style.setProperty('--text-muted', mergedColors.textSecondary);
