@@ -21,7 +21,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
     activeWorkspace,
     setActiveWorkspaceId,
     createWorkspace,
-    notifications,
+    workspaceNotifications,
     markNotificationRead,
     markAllNotificationsRead,
     setSelectedTicketId,
@@ -47,7 +47,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   const userRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadCount = workspaceNotifications.filter((n) => !n.read).length;
 
   // Close menus on outside click
   useEffect(() => {
@@ -279,10 +279,10 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
               </div>
 
               <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
-                {notifications.length === 0 ? (
+                {workspaceNotifications.length === 0 ? (
                   <div className="py-6 text-center text-xs text-slate-400">No notifications yet</div>
                 ) : (
-                  notifications.map((n) => (
+                  workspaceNotifications.map((n) => (
                     <div
                       key={n.id}
                       onClick={() => {

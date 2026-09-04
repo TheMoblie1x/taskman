@@ -146,8 +146,38 @@ override (`WorkspaceAppearanceSettings` type exists, item 10 in requirements.txt
 appropriate" — global-only for now). Account/Calendar/Notification/Licensed-To settings
 sections are Phase 4, not this one.
 
+## Housekeeping — consolidated with pre-existing seed data, fixed deferred notification leak — ✅ DONE (2026-09-04)
+
+Discovered mid-Phase-4-prep that `seedData.ts`/`types.ts` are much richer than my earlier
+skim suggested — I'd only ever read them in fragments. They already contain, fully built and
+realistic, but **completely unused** (same "infrastructure exists, nothing wires it up"
+pattern as `GoogleIcon.tsx` and `themeTokens.ts` before Phases 2–3):
+- `INITIAL_GOALS` — a full realistic SMART Goals dataset across all 3 workspaces (this is
+  Phase 5's data layer, already done).
+- `INITIAL_KANBAN_SETTINGS`, `INITIAL_NOTIFICATION_SETTINGS`, `INITIAL_CALENDAR_SETTINGS` —
+  default settings objects matching the `KanbanCardSettings`/`NotificationSettings`/
+  `CalendarSettings` types exactly.
+- `Ticket.workspaceId` (optional) and `AppNotification` were already designed with workspace
+  scoping in mind by the original scaffold — I'd independently derived the same scoping in
+  Phase 1 rather than noticing the field.
+
+Fixed the one real duplication this caused: Phase 3 had defined its own
+`DEFAULT_KANBAN_CARD_SETTINGS` in `themeTokens.ts` instead of using the identical
+`INITIAL_KANBAN_SETTINGS` that already existed in `seedData.ts` — removed mine, switched
+`AppContext.tsx` to import the canonical one.
+
+Also finished the notification workspace-scoping gap deferred at the end of Phase 1: added
+`workspaceId` to `AppNotification` (type + all 4 notification-creation call sites in
+`AppContext.tsx` + seed data), added a `workspaceNotifications` derived selector alongside
+`workspaceTickets`/`workspaceProjects`, and switched `Sidebar.tsx` (unread badge) and
+`TopNavbar.tsx` (bell dropdown + count) to read from it instead of the raw global list.
+
+Verified: `npm run lint` and `npm run build` both pass clean.
+
 ## Phase 4 — Account / Calendar / Notification settings + "Licensed To" — ⬜ NOT STARTED
-Includes the deferred notification workspace-scoping gap from Phase 1.
+Data layer already exists (`INITIAL_NOTIFICATION_SETTINGS`, `INITIAL_CALENDAR_SETTINGS` in
+seedData.ts, matching `NotificationSettings`/`CalendarSettings` types) — use those as the
+canonical defaults rather than redefining them, per the Housekeeping note above.
 
 ## Phase 5 — SMART Goals feature — ⬜ NOT STARTED
 Large, self-contained feature (nav entry, creation wizard, dashboard, goal detail, milestones,

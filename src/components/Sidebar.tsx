@@ -28,12 +28,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setActiveView,
     workspaceTickets,
     currentUser,
-    notifications,
+    workspaceNotifications,
     calendarConnections,
     isGuestViewer,
   } = useApp();
 
-  const unreadNotifs = notifications.filter((n) => !n.read).length;
+  const unreadNotifs = workspaceNotifications.filter((n) => !n.read).length;
 
   // Tickets assigned to current user, scoped to the active workspace
   const myTasksCount = workspaceTickets.filter(

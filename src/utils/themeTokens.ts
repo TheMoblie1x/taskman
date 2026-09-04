@@ -1,16 +1,4 @@
-import { CustomColors, KanbanCardSettings, PresetThemeName, ThemeMode, SupportedFontFamily, SupportedFontSize } from '../types';
-
-export const DEFAULT_KANBAN_CARD_SETTINGS: KanbanCardSettings = {
-  showTicketId: true,
-  showAssignee: true,
-  showPriority: true,
-  showLabels: true,
-  showDueDate: true,
-  showTicketType: true,
-  showSubtasksCount: true,
-  cardRadius: 'md',
-  columnWidth: 'normal',
-};
+import { CustomColors, PresetThemeName, ThemeMode, SupportedFontFamily, SupportedFontSize } from '../types';
 
 export const SUPPORTED_FONT_FAMILIES: SupportedFontFamily[] = [
   'Plus Jakarta Sans',

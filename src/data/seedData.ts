@@ -890,6 +890,7 @@ export const INITIAL_NOTIFICATIONS: AppNotification[] = [
   {
     id: 'notif_1',
     userId: 'usr_rahul',
+    workspaceId: 'ws_rahul_work',
     title: 'Assigned to Ticket',
     message: 'John Doe assigned AND-142: Fix BLE connection timeout to you.',
     type: 'assigned',
@@ -902,6 +903,7 @@ export const INITIAL_NOTIFICATIONS: AppNotification[] = [
   {
     id: 'notif_2',
     userId: 'usr_rahul',
+    workspaceId: 'ws_rahul_work',
     title: 'Mentioned in Comment',
     message: 'John Doe mentioned you: "@Rahul can you check whether this happens with background scanning?"',
     type: 'mention',
@@ -914,6 +916,7 @@ export const INITIAL_NOTIFICATIONS: AppNotification[] = [
   {
     id: 'notif_3',
     userId: 'usr_rahul',
+    workspaceId: 'ws_rahul_work',
     title: 'Task Overdue Notice',
     message: 'AND-121 Update documentation for BLE reconnect spec was due on Sep 01.',
     type: 'due_soon',

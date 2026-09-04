@@ -174,6 +174,7 @@ export interface ShareLink {
 export interface AppNotification {
   id: string;
   userId: string;
+  workspaceId: string;
   title: string;
   message: string;
   type: 'assigned' | 'mention' | 'comment' | 'status_change' | 'due_soon' | 'invite';

@@ -39,8 +39,9 @@ import {
   INITIAL_NOTIFICATIONS,
   INITIAL_CALENDAR_CONNECTIONS,
   INITIAL_SHARE_LINKS,
+  INITIAL_KANBAN_SETTINGS,
 } from '../data/seedData';
-import { applyThemeTokensToDOM, DEFAULT_KANBAN_CARD_SETTINGS, PRESET_THEMES } from '../utils/themeTokens';
+import { applyThemeTokensToDOM, PRESET_THEMES } from '../utils/themeTokens';
 
 interface FilterState {
   assigneeId?: string | null;
@@ -172,6 +173,7 @@ interface AppContextType {
 
   // Notifications
   notifications: AppNotification[];
+  workspaceNotifications: AppNotification[];
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
 
@@ -239,7 +241,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [customColors, setCustomColorsState] = useState<Partial<CustomColors>>({});
   const [fontFamily, setFontFamilyState] = useState<SupportedFontFamily>('Plus Jakarta Sans');
   const [fontSize, setFontSizeState] = useState<SupportedFontSize>('medium');
-  const [kanbanCardSettings, setKanbanCardSettingsState] = useState<KanbanCardSettings>(DEFAULT_KANBAN_CARD_SETTINGS);
+  const [kanbanCardSettings, setKanbanCardSettingsState] = useState<KanbanCardSettings>(INITIAL_KANBAN_SETTINGS);
   const [customThemeProfiles, setCustomThemeProfiles] = useState<CustomThemeProfile[]>([]);
 
   const setTheme = useCallback((mode: ThemeMode) => {
@@ -327,7 +329,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCustomColorsState({});
     setFontFamilyState('Plus Jakarta Sans');
     setFontSizeState('medium');
-    setKanbanCardSettingsState(DEFAULT_KANBAN_CARD_SETTINGS);
+    setKanbanCardSettingsState(INITIAL_KANBAN_SETTINGS);
     setDensity('compact');
   }, [setTheme, setDensity]);
 
@@ -387,7 +389,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (data.customColors) setCustomColorsState(data.customColors);
         if (data.fontFamily) setFontFamilyState(data.fontFamily);
         if (data.fontSize) setFontSizeState(data.fontSize);
-        if (data.kanbanCardSettings) setKanbanCardSettingsState({ ...DEFAULT_KANBAN_CARD_SETTINGS, ...data.kanbanCardSettings });
+        if (data.kanbanCardSettings) setKanbanCardSettingsState({ ...INITIAL_KANBAN_SETTINGS, ...data.kanbanCardSettings });
         if (data.customThemeProfiles) setCustomThemeProfiles(data.customThemeProfiles);
       }
     } catch (e) {
@@ -475,6 +477,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const workspaceProjectIds = new Set(workspaceProjects.map((p) => p.id));
   const workspaceBoards = boards.filter((b) => workspaceProjectIds.has(b.projectId));
   const workspaceTickets = tickets.filter((t) => workspaceProjectIds.has(t.projectId));
+  const workspaceNotifications = notifications.filter((n) => n.workspaceId === activeWorkspace.id);
 
   const activeProject = workspaceProjects.find((p) => p.id === activeProjectId) || workspaceProjects[0] || null;
   const activeBoard = activeProject ? boards.find((b) => b.projectId === activeProject.id) || null : null;
@@ -573,6 +576,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         {
           id: `notif_${Date.now()}`,
           userId: currentUser.id,
+          workspaceId: activeWorkspace.id,
           title: 'Invitation Sent',
           message: `Invited ${email} as ${role} to ${activeWorkspace.name}.`,
           type: 'invite',
@@ -764,6 +768,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           {
             id: `notif_${Date.now()}`,
             userId: data.assigneeId!,
+            workspaceId: activeWorkspace.id,
             title: 'New Ticket Assigned',
             message: `${currentUser.name} assigned ${activeProject.key}-${nextNumber} to you: "${data.title}"`,
             type: 'assigned',
@@ -780,7 +785,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setTickets((prev) => [newTicket, ...prev]);
       return newTicket;
     },
-    [activeBoard, activeProject, allUsers, currentUser, tickets]
+    [activeBoard, activeProject, activeWorkspace, allUsers, currentUser, tickets]
   );
 
   // Update ticket with activity tracking
@@ -813,6 +818,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               {
                 id: `notif_${Date.now()}`,
                 userId: updates.assigneeId!,
+                workspaceId: activeWorkspace.id,
                 title: 'Ticket Assigned',
                 message: `${currentUser.name} assigned ${activeProject?.key || 'TKT'}-${t.ticketNumber} to you`,
                 type: 'assigned',
@@ -830,7 +836,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         })
       );
     },
-    [activeProject, allUsers, currentUser]
+    [activeProject, activeWorkspace, allUsers, currentUser]
   );
 
   // Move ticket (Kanban drag & drop)
@@ -1023,6 +1029,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               {
                 id: `notif_ment_${Date.now()}`,
                 userId: matchedUser.id,
+                workspaceId: activeWorkspace.id,
                 title: 'You were mentioned',
                 message: `${currentUser.name} mentioned you in ${activeProject?.key || 'Ticket'}-${currentTicket.ticketNumber}`,
                 type: 'mention',
@@ -1046,7 +1053,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         'added a comment'
       );
     },
-    [activeProject, allUsers, currentUser, tickets, updateTicket]
+    [activeProject, activeWorkspace, allUsers, currentUser, tickets, updateTicket]
   );
 
   // Attachments
@@ -1249,6 +1256,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         calendarConnections,
         toggleCalendarConnection,
         notifications,
+        workspaceNotifications,
         markNotificationRead,
         markAllNotificationsRead,
         resetToDefaults,
