@@ -4,7 +4,14 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
 } from 'firebase/firestore';
-import { getAuth, signInAnonymously, onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  type User as FirebaseUser,
+} from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -33,28 +40,39 @@ export const db = app
 
 export const auth = app ? getAuth(app) : null;
 
+export type { FirebaseUser };
+
 /**
- * Every client authenticates anonymously so Firestore Security Rules can require
- * `request.auth != null` — this is NOT the app's own user/persona system (that's still the
- * seeded `currentUser` switcher in AppContext) and does not give per-user row-level ACLs.
- * It's the minimum viable thing that lets the rules block totally unauthenticated access
- * without pulling in a full Google Sign-In flow. See PROGRESS.md for the tradeoff.
+ * Real identity — every person using the app signs in with their own Google account. This
+ * replaces the old anonymous-auth-only setup: Firestore Security Rules can now check
+ * `request.auth.token.email` for actual per-user/per-workspace-membership authorization
+ * (see firestore.rules), not just "some client is signed in."
  */
-export function ensureFirebaseAuth(): Promise<FirebaseUser | null> {
+export function signInWithGoogle(): Promise<FirebaseUser | null> {
   if (!auth) return Promise.resolve(null);
-  return new Promise((resolve) => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      unsubscribe();
-      if (user) {
-        resolve(user);
-      } else {
-        signInAnonymously(auth)
-          .then((cred) => resolve(cred.user))
-          .catch((err) => {
-            console.error('Firebase anonymous sign-in failed:', err);
-            resolve(null);
-          });
-      }
+  const provider = new GoogleAuthProvider();
+  return signInWithPopup(auth, provider)
+    .then((cred) => cred.user)
+    .catch((err) => {
+      console.error('Google sign-in failed:', err);
+      throw err;
     });
-  });
+}
+
+export function signOutOfApp(): Promise<void> {
+  if (!auth) return Promise.resolve();
+  return signOut(auth);
+}
+
+/**
+ * Subscribes to auth state for the lifetime of the app (unlike the old ensureFirebaseAuth,
+ * which resolved once). Fires immediately with the current user (or null) and again on every
+ * sign-in/out.
+ */
+export function onAuthChange(callback: (user: FirebaseUser | null) => void): () => void {
+  if (!auth) {
+    callback(null);
+    return () => {};
+  }
+  return onAuthStateChanged(auth, callback);
 }

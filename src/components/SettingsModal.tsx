@@ -91,7 +91,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     setNotificationSettings,
     calendarSettings,
     setCalendarSettings,
-    setIsGuestViewer,
+    signOutApp,
   } = useApp();
 
   const activeWorkspaceMembers = workspaceMembers.filter((m) => m.workspaceId === activeWorkspace?.id);
@@ -129,8 +129,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
   const handleSignOut = () => {
     if (confirm('Sign out of your account?')) {
-      setIsGuestViewer(true);
       onClose();
+      signOutApp();
     }
   };
 

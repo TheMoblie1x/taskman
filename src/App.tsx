@@ -15,6 +15,8 @@ import { ShortcutsModal } from './components/ShortcutsModal';
 import { GoalsView } from './components/GoalsView';
 import { CreateGoalModal } from './components/CreateGoalModal';
 import { GoalDetailModal } from './components/GoalDetailModal';
+import { LoginScreen } from './components/LoginScreen';
+import { GoogleIcon } from './components/GoogleIcon';
 
 const AppContent: React.FC = () => {
   const { activeView, setActiveView, selectedTicketId } = useApp();
@@ -167,10 +169,31 @@ const AppContent: React.FC = () => {
   );
 };
 
+// Gates the real app behind real sign-in. `authChecked` distinguishes "still checking whether
+// there's an existing session" from "checked, and there isn't one" — without it, a signed-in
+// user would flash the login screen for a moment on every page load.
+const AuthGate: React.FC = () => {
+  const { isSignedIn, authChecked } = useApp();
+
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <GoogleIcon name="progress_activity" size={28} className="animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  if (!isSignedIn) {
+    return <LoginScreen />;
+  }
+
+  return <AppContent />;
+};
+
 export default function App() {
   return (
     <AppProvider>
-      <AppContent />
+      <AuthGate />
     </AppProvider>
   );
 }

@@ -115,6 +115,67 @@ export const subscribeAllWorkspaceMembers = (onData: (rows: WorkspaceMember[]) =
 export const saveWorkspaceMember = (member: WorkspaceMember) =>
   setDoc(doc(requireDb(), 'workspaceMembers', member.id), member);
 
+/**
+ * Deterministic membership doc ID (workspaceId + normalized email) — this is what lets
+ * firestore.rules check "is this signed-in email a member of this workspace" with a plain
+ * `exists()` lookup instead of an indexed query, and what lets `claimPendingInvites` below find
+ * an invite by email before the invited person has ever signed in (so has no uid yet).
+ */
+export const membershipDocId = (workspaceId: string, email: string) =>
+  `${workspaceId}__${email.trim().toLowerCase()}`;
+
+/**
+ * One-time data-shape fix: membership docs created before real auth existed (the seed data,
+ * and anything invited/created while only anonymous auth was wired) use arbitrary IDs like
+ * `wm_1`. firestore.rules' isWorkspaceMember() finds a membership by `exists()` on the exact
+ * deterministic (workspaceId + email) doc ID — a membership under the wrong ID is invisible to
+ * that check, which would lock even a workspace's own owner out of their pre-existing data the
+ * moment real per-membership rules are deployed. Safe to call on every boot: a no-op once every
+ * doc already has its correct ID.
+ */
+export async function migrateLegacyMembershipIds(): Promise<number> {
+  const database = requireDb();
+  const snap = await getDocs(collection(database, 'workspaceMembers'));
+  const stale = snap.docs.filter((d) => {
+    const data = d.data() as WorkspaceMember;
+    return data.workspaceId && data.user?.email && d.id !== membershipDocId(data.workspaceId, data.user.email);
+  });
+  if (stale.length === 0) return 0;
+
+  const batch = writeBatch(database);
+  stale.forEach((d) => {
+    const data = d.data() as WorkspaceMember;
+    const correctId = membershipDocId(data.workspaceId, data.user.email);
+    batch.set(doc(database, 'workspaceMembers', correctId), { ...data, id: correctId });
+    batch.delete(d.ref);
+  });
+  await batch.commit();
+  return stale.length;
+}
+
+/**
+ * Run once right after a real sign-in: finds any workspaceMembers docs that were created by
+ * `inviteMember` for this email before the person had an account (status 'invited', a
+ * placeholder `user`), and activates them with the now-known real user (uid, name, avatar).
+ * This is how "invite a teammate by email, they sign in later and see the workspace" works.
+ */
+export async function claimPendingInvites(email: string, realUser: User): Promise<number> {
+  const database = requireDb();
+  const q = query(
+    collection(database, 'workspaceMembers'),
+    where('user.email', '==', email.trim().toLowerCase()),
+    where('status', '==', 'invited')
+  );
+  const snap = await getDocs(q);
+  if (snap.empty) return 0;
+  const batch = writeBatch(database);
+  snap.docs.forEach((d) => {
+    batch.update(d.ref, { status: 'active', user: realUser });
+  });
+  await batch.commit();
+  return snap.size;
+}
+
 // ---- Projects ----
 export const subscribeAllProjects = (onData: (rows: Project[]) => void, onError?: (e: unknown) => void) =>
   subscribeCollection<Project>('projects', [], onData, onError);

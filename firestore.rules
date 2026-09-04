@@ -1,23 +1,44 @@
 rules_version = '2';
 
-// Baseline for this app: every client (including this app's own UI) authenticates
-// anonymously before touching Firestore (see src/lib/firebase.ts, ensureFirebaseAuth) so
-// these rules can at least require request.auth != null — blocking direct, unauthenticated
-// access to the database from outside the app.
+// Real per-user authorization: every client signs in with their own Google account (see
+// src/lib/firebase.ts, signInWithGoogle) — anonymous auth is gone. Workspace membership is
+// looked up by a deterministic doc ID (workspaceId + lowercased email, built by
+// src/data/firestoreRepository.ts's membershipDocId) so a plain exists() check can answer
+// "is this signed-in email a member of this workspace" without an indexed query.
 //
-// IMPORTANT — this is NOT per-user/per-workspace authorization. The app's own "current user"
-// concept (the persona switcher in Settings > Account) is a UI-level convenience, not tied to
-// Firebase Auth identity, so these rules cannot check "is this the ticket's assignee" or "is
-// this user a member with edit rights on this workspace" the way requirements.txt describes
-// (Viewer/Editor/Admin/Owner permission tiers). Getting that requires wiring real Firebase
-// Authentication (e.g. Google Sign-In) in place of the persona switcher, so `request.auth.uid`
-// actually corresponds to a workspaceMembers row — tracked as a follow-up in PROGRESS.md, not
-// done here. Until then, treat this Firestore database as "shared among anyone who has this
-// app's client config", same trust boundary the app already had with a shared browser profile.
+// Known simplification (tracked in PROGRESS.md, not done here): `workspaceMembers` itself only
+// requires being signed in, not already being a member — tightening that to "can only write
+// your own membership, or extend one if you're already an owner/admin" is real per-row ACL
+// logic and a bigger change. `workspaces`/`projects`/`boards`/`users`/`shareLinks`/
+// `calendarConnections` are also just "any signed-in user" for the same reason: boards/projects
+// don't carry a workspaceId field to check against directly. `tickets`/`goals`/`notifications`
+// (the collections people actually read/write while using a workspace) get the real
+// membership check below, which is the part that matters most for genuine multi-user use.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() {
-      return request.auth != null;
+      return request.auth != null && request.auth.token.email != null;
+    }
+
+    function isWorkspaceMember(workspaceId) {
+      return signedIn() && exists(
+        /databases/$(database)/documents/workspaceMembers/$(workspaceId + '__' + request.auth.token.email.lower())
+      );
+    }
+
+    match /tickets/{ticketId} {
+      allow read, update, delete: if isWorkspaceMember(resource.data.workspaceId);
+      allow create: if isWorkspaceMember(request.resource.data.workspaceId);
+    }
+
+    match /goals/{goalId} {
+      allow read, update, delete: if isWorkspaceMember(resource.data.workspaceId);
+      allow create: if isWorkspaceMember(request.resource.data.workspaceId);
+    }
+
+    match /notifications/{notificationId} {
+      allow read, update, delete: if isWorkspaceMember(resource.data.workspaceId);
+      allow create: if isWorkspaceMember(request.resource.data.workspaceId);
     }
 
     match /{document=**} {

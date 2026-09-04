@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { GoogleIcon } from './GoogleIcon';
+import { isFirebaseConfigured } from '../lib/firebase';
 
 interface TopNavbarProps {
   onOpenCreateTicket: () => void;
@@ -15,8 +16,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
 }) => {
   const {
     currentUser,
-    allUsers,
-    setCurrentUser,
+    signOutApp,
     workspaces,
     activeWorkspace,
     setActiveWorkspaceId,
@@ -389,36 +389,6 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                 </div>
               </div>
 
-              {/* Persona Switcher for testing collaboration */}
-              <div className="px-3 py-1.5 bg-slate-50/70 border-b border-slate-100">
-                <div className="text-[10px] font-semibold text-slate-500 mb-1 flex items-center justify-between">
-                  <span>Switch Test Member (Multi-user)</span>
-                  <GoogleIcon name="auto_awesome" size={10} className="text-amber-500" />
-                </div>
-                <div className="space-y-0.5">
-                  {allUsers.map((u) => (
-                    <button
-                      key={u.id}
-                      onClick={() => {
-                        setCurrentUser(u);
-                        setUserDropdownOpen(false);
-                      }}
-                      className={`w-full text-left px-2 py-1 rounded text-[11px] flex items-center justify-between transition-colors ${
-                        u.id === currentUser.id
-                          ? 'bg-blue-100/70 text-blue-800 font-semibold'
-                          : 'hover:bg-slate-200/60 text-slate-700'
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5 truncate">
-                        <img src={u.avatarUrl} alt="" className="w-3.5 h-3.5 rounded-full" />
-                        <span className="truncate">{u.name}</span>
-                      </div>
-                      <span className="text-[9px] text-slate-400 capitalize">{u.role}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* Guest / Public Link view toggle */}
               <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between">
                 <div>
@@ -445,6 +415,18 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                   <GoogleIcon name="settings" size={14} className="text-slate-500" />
                   Workspace Settings & Integrations
                 </button>
+                {isFirebaseConfigured && (
+                  <button
+                    onClick={() => {
+                      setUserDropdownOpen(false);
+                      signOutApp();
+                    }}
+                    className="w-full text-left px-2.5 py-1.5 text-xs text-rose-600 hover:bg-rose-50 rounded flex items-center gap-2"
+                  >
+                    <GoogleIcon name="logout" size={14} />
+                    Sign Out
+                  </button>
+                )}
               </div>
             </div>
           )}

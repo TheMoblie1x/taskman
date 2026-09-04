@@ -349,16 +349,90 @@ same-mode baseline (`midnight` for dark, `default` for light). `--kanban-column`
 every time, reusing `mergedColors.sidebar` (no dedicated field for it in `CustomColors`, and
 sidebar is a similar "recessed panel" tone in every preset).
 
-Verified: `npm run lint` + `npm run build` clean. **Not yet re-verified live in the browser** —
-the Chrome extension was disconnected when this was fixed; ask for a visual re-check next time
-dark mode comes up, or if this recurs.
+Verified: `npm run lint` + `npm run build` clean, and confirmed live once the browser extension
+reconnected — the login screen (see next section) renders with correct, properly-contrasted
+dark colors, which incidentally re-confirmed this fix.
+
+## Real multi-user collaboration: Firebase Auth (Google Sign-In) (2026-09-05)
+
+Replaced the fake "switch persona" system with real per-user identity, so the app can
+actually be used by more than one real person, as opposed to one person locally pretending
+to be different demo users. Also added an in-progress note: the project directory had to move
+from `~/Downloads/collab` to `~/Desktop/collab` mid-session — macOS revoked terminal access to
+Downloads specifically; Desktop wasn't affected. No project-relative paths changed.
+
+**What changed:**
+- `src/lib/firebase.ts`: replaced anonymous-only auth with `signInWithGoogle()` (Google
+  popup), `signOutOfApp()`, and a persistent `onAuthChange()` listener (the old
+  `ensureFirebaseAuth()` resolved once; this fires for the whole app lifetime).
+- `AppContext.tsx`: `currentUser` is no longer its own `useState` — it's derived from the
+  real signed-in Firebase user (merged with their `users/{uid}` Firestore doc), except when
+  Firebase isn't configured at all, where it falls back to the old locally-switchable demo
+  persona (`localPersonaUser`) so local dev without any `.env` still works. On every real
+  sign-in, the auth listener upserts the user's `users/{uid}` profile (name/email/avatar
+  refreshed from Google, existing preferences untouched via `merge: true`) and calls
+  `claimPendingInvites` (see below). `isSignedIn` explicitly excludes anonymous sessions
+  (`authUser.isAnonymous`) — without that check, anyone who'd used the app during Phase 6
+  (anonymous-auth-only) would have a cached anonymous session that looked "signed in" but
+  isn't a real account; caught this live during testing (see below).
+- New `LoginScreen.tsx` + an `AuthGate` in `App.tsx`: shows a loading spinner while the
+  initial auth check is in flight, the login screen if not signed in, the real app otherwise.
+- `TopNavbar.tsx`: removed the "Switch Test Member" persona-switcher block entirely (it
+  directly contradicted real identity); added a real Sign Out entry. `SettingsModal.tsx`'s
+  existing Sign Out button now calls the real `signOutApp()` instead of just flipping the old
+  `isGuestViewer` flag.
+- **Real invite flow**: `inviteMember` now writes the membership doc under a deterministic ID
+  (`workspaceId__lowercasedEmail`, via `firestoreRepository.membershipDocId`) instead of a
+  random one. When someone signs in with an email that has a pending invite,
+  `claimPendingInvites` finds it (`workspaceMembers` query on `user.email` + `status ==
+  'invited'`) and activates it with their real profile — this is what makes "invite a
+  teammate by email, they sign in later and see the workspace" actually work.
+- **Migration for existing data**: the deterministic ID is also what `firestore.rules`' new
+  `isWorkspaceMember()` check looks up via `exists()`. The pre-existing seed data's membership
+  docs (`wm_1`..`wm_4`) used arbitrary IDs, which would have locked even a workspace's own
+  owner out the moment real rules went live. Added `migrateLegacyMembershipIds()` (re-keys any
+  membership doc whose ID doesn't match the deterministic pattern), called automatically on
+  every boot — a no-op once everything's already correct. Also updated `createWorkspace`'s
+  owner-membership creation to use the deterministic ID from the start.
+- `firestore.rules` rewritten: requires a real, non-anonymous signed-in email
+  (`request.auth.token.email`) for everything, and `tickets`/`goals`/`notifications` (the
+  collections people actually read/write while using a workspace) additionally require
+  `isWorkspaceMember(workspaceId)` — a real per-workspace-membership check, not just "some
+  client is signed in." **Documented, deliberate simplification**: `workspaceMembers` itself,
+  and `workspaces`/`projects`/`boards`/`users`/`shareLinks`/`calendarConnections`, still only
+  require being signed in — true per-row ACLs on membership writes, and workspace-level
+  isolation for boards/projects (which don't carry a `workspaceId` field to check), are further
+  work, not done here.
+
+**Verified live** (real Google OAuth, using this browser's own already-authenticated session —
+did not enter or handle any credentials): login screen renders correctly; sign-in completes
+and shows the real identity (name/email) in place of the old persona switcher, which is gone;
+the pre-existing seeded workspace loaded correctly under the real account, confirming the
+legacy-membership migration worked; no console errors. Google sign-in was already enabled on
+this Firebase project (no extra console step needed, unlike Anonymous auth earlier).
+
+**Still needed from the user before this is fully live:**
+1. **Publish the updated `firestore.rules`** (Console > Firestore Database > Rules > paste >
+   Publish) — the currently-live rules are still the old "any signed-in client" version from
+   Phase 6, so the new per-workspace-membership restriction isn't actually enforced yet.
+2. **Authorized domain for the deployed site**: Google Sign-In popups only work from domains
+   Firebase knows about. `localhost` is authorized by default; the Netlify domain isn't yet —
+   add it under Console > Authentication > Settings > Authorized domains, or sign-in will fail
+   there even though it worked here.
+
+Verified: `npm run lint` + `npm run build` clean.
+
+**Documentation portal (in-app workspace wiki) — not started yet.** Scoped with the user as a
+separate, real-time-synced Firestore collection of workspace pages, linkable from projects/
+goals/tickets. Next up.
 
 ---
-All 6 phases from REQUIREMENTS.md are done. Known open items for future work, not tracked as
-phases here: real Firebase Auth (Google Sign-In) to replace the persona switcher so Firestore
-security rules can enforce actual per-user/per-workspace-role permissions, and syncing
-appearance/notification/calendar settings to Firestore (`users/{id}`) instead of localStorage
-for cross-device settings sync.
+All 6 phases from REQUIREMENTS.md are done, plus real Google Sign-In (above). Known open items
+for future work, not tracked as phases here: the in-app documentation/wiki portal (scoped,
+not started), tightening `workspaceMembers`/`workspaces`/`projects`/`boards` to real per-row
+ACLs instead of "any signed-in user" (see the Auth section's documented simplification), and
+syncing appearance/notification/calendar settings to Firestore (`users/{id}`) instead of
+localStorage for cross-device settings sync.
 
 ### How to resume (if more work comes up)
 1. Read this file.

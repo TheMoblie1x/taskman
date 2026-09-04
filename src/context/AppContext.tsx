@@ -52,7 +52,7 @@ import {
 } from '../data/seedData';
 import { applyThemeTokensToDOM, PRESET_THEMES } from '../utils/themeTokens';
 import { calculateGoalHealth, calculateGoalProgress, isGoalProgressDerived } from '../utils/goalUtils';
-import { isFirebaseConfigured, ensureFirebaseAuth } from '../lib/firebase';
+import { isFirebaseConfigured, onAuthChange, signInWithGoogle, signOutOfApp, type FirebaseUser } from '../lib/firebase';
 import * as repo from '../data/firestoreRepository';
 
 interface FilterState {
@@ -70,6 +70,10 @@ interface AppContextType {
   setCurrentUser: (user: User) => void;
   isGuestViewer: boolean;
   setIsGuestViewer: (val: boolean) => void;
+  isSignedIn: boolean;
+  authChecked: boolean;
+  signIn: () => Promise<void>;
+  signOutApp: () => Promise<void>;
 
   // Workspaces
   workspaces: Workspace[];
@@ -235,9 +239,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Load saved state or default
   const [initialized, setInitialized] = useState(false);
 
+  // Real identity: every person signs in with their own Google account when Firebase is
+  // configured (see the auth effect below) — `currentUser` is derived from it further down,
+  // not its own independent state. `localPersonaUser` only matters when Firebase isn't
+  // configured at all (no env vars — local dev fallback), where there's no real login to
+  // derive an identity from and the app behaves like it always did before Phase 6.
+  const [authUser, setAuthUser] = useState<FirebaseUser | null>(null);
+  const [authChecked, setAuthChecked] = useState<boolean>(!isFirebaseConfigured);
+  const [localPersonaUser, setLocalPersonaUser] = useState<User>(INITIAL_USERS[0]);
+
   // Collaborative data now lives in Firestore (see firestoreDataReady effect below) — these
   // start empty and are populated by onSnapshot listeners, not synchronous seed constants.
-  const [currentUser, setCurrentUserState] = useState<User>(INITIAL_USERS[0]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [isGuestViewer, setIsGuestViewer] = useState<boolean>(false);
 
@@ -528,6 +540,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [workspaces, activeWorkspaceId]);
 
+  // ---- Real auth: sign-in state, profile upsert, and claiming pending email invites ----
+  // Runs for the lifetime of the app (not just once on mount) so sign-in/out from anywhere
+  // (Settings, TopNavbar, another tab) is reflected here immediately.
+  useEffect(() => {
+    if (!isFirebaseConfigured) {
+      setAuthChecked(true);
+      return;
+    }
+    const unsubscribe = onAuthChange(async (user) => {
+      setAuthUser(user);
+      if (user && !user.isAnonymous) {
+        const profile: repo.UserDoc = {
+          id: user.uid,
+          googleId: user.uid,
+          email: (user.email || '').toLowerCase(),
+          name: user.displayName || user.email || 'User',
+          avatarUrl: user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`,
+          role: 'member',
+        };
+        try {
+          // merge: true — refreshes name/avatar/email from Google without clobbering the
+          // user's own saved preferences (theme, notification settings, ...).
+          await repo.saveUser(profile);
+          if (user.email) {
+            const claimed = await repo.claimPendingInvites(user.email, profile);
+            if (claimed > 0) {
+              console.log(`Claimed ${claimed} pending workspace invite(s) for ${user.email}.`);
+            }
+          }
+        } catch (e) {
+          console.error('Post-sign-in profile/invite setup failed:', e);
+        }
+      }
+      setAuthChecked(true);
+    });
+    return unsubscribe;
+  }, []);
+
+  const signIn = useCallback(async () => {
+    try {
+      await signInWithGoogle();
+    } catch (e) {
+      console.error('Sign-in failed:', e);
+    }
+  }, []);
+
+  const signOutApp = useCallback(async () => {
+    try {
+      await signOutOfApp();
+    } catch (e) {
+      console.error('Sign-out failed:', e);
+    }
+  }, []);
+
   // ---- Firestore: auth, one-time seed, and collections that aren't workspace-scoped ----
   // (workspaces themselves, users, projects, boards, share links, calendar connections —
   // the app has always kept these as one in-memory pool filtered client-side per workspace,
@@ -555,21 +621,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
+    // Wait for a real, signed-in user before touching Firestore at all — App.tsx shows the
+    // login screen until then, and Firestore Security Rules require a real (non-anonymous)
+    // signed-in email anyway, so subscribing earlier would just fail with permission errors.
+    // (A leftover anonymous session from before real auth existed also counts as "not yet".)
+    if (!authUser || authUser.isAnonymous) return;
+
     let cancelled = false;
     const unsubscribers: Array<() => void> = [];
 
     (async () => {
-      await ensureFirebaseAuth();
-      if (cancelled) return;
-
       try {
         await repo.seedFirestoreIfEmpty({
           workspaces: INITIAL_WORKSPACES,
           workspaceMembers: [
-            { id: 'wm_1', workspaceId: 'ws_rahul_work', user: INITIAL_USERS[0], role: 'owner', status: 'active', joinedAt: '2026-08-01' },
-            { id: 'wm_2', workspaceId: 'ws_rahul_work', user: INITIAL_USERS[1], role: 'admin', status: 'active', joinedAt: '2026-08-02' },
-            { id: 'wm_3', workspaceId: 'ws_rahul_work', user: INITIAL_USERS[2], role: 'member', status: 'active', joinedAt: '2026-08-05' },
-            { id: 'wm_4', workspaceId: 'ws_rahul_work', user: INITIAL_USERS[3], role: 'guest', status: 'active', joinedAt: '2026-08-10' },
+            { id: repo.membershipDocId('ws_rahul_work', INITIAL_USERS[0].email), workspaceId: 'ws_rahul_work', user: INITIAL_USERS[0], role: 'owner', status: 'active', joinedAt: '2026-08-01' },
+            { id: repo.membershipDocId('ws_rahul_work', INITIAL_USERS[1].email), workspaceId: 'ws_rahul_work', user: INITIAL_USERS[1], role: 'admin', status: 'active', joinedAt: '2026-08-02' },
+            { id: repo.membershipDocId('ws_rahul_work', INITIAL_USERS[2].email), workspaceId: 'ws_rahul_work', user: INITIAL_USERS[2], role: 'member', status: 'active', joinedAt: '2026-08-05' },
+            { id: repo.membershipDocId('ws_rahul_work', INITIAL_USERS[3].email), workspaceId: 'ws_rahul_work', user: INITIAL_USERS[3], role: 'guest', status: 'active', joinedAt: '2026-08-10' },
           ],
           projects: INITIAL_PROJECTS,
           boards: INITIAL_BOARDS,
@@ -582,6 +651,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
       } catch (e) {
         console.error('Firestore seed failed (likely a permissions/rules issue):', e);
+      }
+
+      try {
+        const migrated = await repo.migrateLegacyMembershipIds();
+        if (migrated > 0) console.log(`Migrated ${migrated} legacy workspace membership doc ID(s).`);
+      } catch (e) {
+        console.error('Membership ID migration failed:', e);
       }
 
       if (cancelled) return;
@@ -598,13 +674,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       cancelled = true;
       unsubscribers.forEach((u) => u());
     };
-  }, []);
+  }, [authUser?.uid]);
 
   // ---- Firestore: workspace-scoped collections — re-subscribed whenever the active
   // workspace changes. Cleanly tearing down the previous workspace's listeners first (the
   // effect cleanup below) is exactly what stops stale data from a prior workspace appearing.
   useEffect(() => {
-    if (!isFirebaseConfigured || !activeWorkspaceId) return;
+    if (!isFirebaseConfigured || !activeWorkspaceId || !authUser || authUser.isAnonymous) return;
 
     const unsubMembers = repo.subscribeWorkspaceMembers(activeWorkspaceId, setWorkspaceMembers);
     const unsubTickets = repo.subscribeWorkspaceTickets(activeWorkspaceId, setTickets);
@@ -617,7 +693,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubGoals();
       unsubNotifications();
     };
-  }, [activeWorkspaceId]);
+  }, [activeWorkspaceId, authUser?.uid]);
 
   // Safe empty placeholder while Firestore's first snapshot is still in flight — every
   // downstream .filter(w => w.workspaceId === activeWorkspace.id) below just yields an empty
@@ -640,15 +716,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const selectedTicket = tickets.find((t) => t.id === selectedTicketId) || null;
 
-  const userCanEdit = !isGuestViewer && currentUser.role !== 'guest';
+  // Real identity when Firebase is configured: the signed-in Firebase user's own users/{uid}
+  // Firestore doc (falling back to a profile built straight from the auth token for the brief
+  // window before that doc's first snapshot arrives). Without Firebase configured at all,
+  // fall back to the old locally-switchable demo persona so local dev keeps working.
+  const currentUser: User = !isFirebaseConfigured
+    ? localPersonaUser
+    : authUser
+    ? allUsers.find((u) => u.id === authUser.uid) || {
+        id: authUser.uid,
+        googleId: authUser.uid,
+        email: (authUser.email || '').toLowerCase(),
+        name: authUser.displayName || authUser.email || 'User',
+        avatarUrl: authUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser.uid}`,
+        role: 'member',
+      }
+    : { id: '', googleId: '', email: '', name: '', avatarUrl: '', role: 'guest' };
 
+  const userCanEdit = !isGuestViewer && currentUser.role !== 'guest';
+  // isAnonymous excludes leftover anonymous sessions from before real auth existed (Phase 6
+  // used anonymous sign-in; anyone who tested it has that session cached in their browser) —
+  // those have no email, so Firestore rules already reject them, but the login gate should
+  // treat them as "not signed in" too rather than showing a broken, permission-denied app.
+  const isSignedIn = !isFirebaseConfigured || (authUser !== null && !authUser.isAnonymous);
+
+  // Only meaningful in local (no-Firebase) dev mode — see localPersonaUser above. With
+  // Firebase configured, identity comes from real sign-in and can't be "switched".
   const setCurrentUser = useCallback((user: User) => {
-    setCurrentUserState(user);
-    if (user.role === 'guest') {
-      setIsGuestViewer(true);
-    } else {
-      setIsGuestViewer(false);
-    }
+    if (isFirebaseConfigured) return;
+    setLocalPersonaUser(user);
+    setIsGuestViewer(user.role === 'guest');
   }, []);
 
   // Create workspace
@@ -667,8 +764,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // The creator is always the workspace's first member (pre-existing gap: this was never
       // recorded before, which security rules built on workspace membership now depend on).
+      // Must use the same deterministic (workspaceId + email) ID inviteMember uses — this is
+      // exactly what firestore.rules' isWorkspaceMember() looks up by exists(), so the owner's
+      // own membership needs to be found the same way anyone else's would be.
       const ownerMember: WorkspaceMember = {
-        id: `wm_${Date.now()}`,
+        id: isFirebaseConfigured && currentUser.email ? repo.membershipDocId(newWs.id, currentUser.email) : `wm_${Date.now()}`,
         workspaceId: newWs.id,
         user: currentUser,
         role: 'owner',
@@ -717,13 +817,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Invite member
   const inviteMember = useCallback(
     (email: string, role: WorkspaceRole) => {
-      const existingUser = allUsers.find((u) => u.email.toLowerCase() === email.toLowerCase());
+      const normalizedEmail = email.trim().toLowerCase();
+      const existingUser = allUsers.find((u) => u.email.toLowerCase() === normalizedEmail);
+      // A placeholder profile until the invited person actually signs in with this email —
+      // AppContext's auth effect calls claimPendingInvites on every real sign-in, which finds
+      // this membership doc by (workspaceId + email) and swaps this placeholder for their
+      // real Google profile (uid, name, avatar) at that point.
       const invitedUser: User = existingUser || {
-        id: `usr_${Date.now()}`,
-        googleId: `google_${Date.now()}`,
-        email,
-        name: email.split('@')[0],
-        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`,
+        id: `pending_${normalizedEmail}`,
+        googleId: '',
+        email: normalizedEmail,
+        name: normalizedEmail.split('@')[0],
+        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${normalizedEmail}`,
         role,
       };
 
@@ -733,11 +838,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       const newMember: WorkspaceMember = {
-        id: `wm_${Date.now()}`,
+        id: isFirebaseConfigured ? repo.membershipDocId(activeWorkspace.id, normalizedEmail) : `wm_${Date.now()}`,
         workspaceId: activeWorkspace.id,
         user: invitedUser,
         role,
-        status: 'invited',
+        status: existingUser ? 'active' : 'invited',
         joinedAt: new Date().toISOString(),
       };
       setWorkspaceMembers((prev) => [...prev, newMember]);
@@ -1535,6 +1640,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentUser,
         isGuestViewer,
         setIsGuestViewer,
+        isSignedIn,
+        authChecked,
+        signIn,
+        signOutApp,
         workspaces,
         activeWorkspace,
         setActiveWorkspaceId,
