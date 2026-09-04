@@ -1,6 +1,6 @@
-# requirements.txt — implementation progress
+# REQUIREMENTS.md — implementation progress
 
-Working through `requirements.txt` one phase at a time to keep sessions small and cheap.
+Working through `REQUIREMENTS.md` one phase at a time to keep sessions small and cheap.
 Update this file's checkboxes/status as work lands. Don't re-derive context that's already
 recorded here — read this file first at the start of a new session.
 
@@ -60,7 +60,7 @@ Removed the now-unused `lucide-react` dependency from `package.json`.
 Verified: `npm run lint` (tsc) and `npm run build` both pass clean; no leftover
 `lucide-react` imports anywhere in `src/`.
 
-**Deferred, minor:** requirements.txt also asks for tooltips on unfamiliar icon-only
+**Deferred, minor:** REQUIREMENTS.md also asks for tooltips on unfamiliar icon-only
 buttons. Most already have a `title` attribute (carried over untouched by the migration);
 a full sweep for the few that might be missing one wasn't done — worth a quick pass during
 Phase 3/4 UI polish rather than as its own session.
@@ -142,7 +142,7 @@ sidebar/cards/columns re-themed live; unchecked "Assignee" — avatars disappear
 card; typed in the (previously dead) top search bar — board filtered live. No console errors.
 
 **Explicitly deferred** (kept out to keep this phase shippable): per-workspace appearance
-override (`WorkspaceAppearanceSettings` type exists, item 10 in requirements.txt says "where
+override (`WorkspaceAppearanceSettings` type exists, item 10 in REQUIREMENTS.md says "where
 appropriate" — global-only for now). Account/Calendar/Notification/Licensed-To settings
 sections are Phase 4, not this one.
 
@@ -197,7 +197,7 @@ as the canonical defaults, per the Housekeeping note above — no duplication th
     tear down, so this reuses the app's existing view-only mode rather than faking a log-out),
     Delete Account (explains it needs a backend this local demo doesn't have, per the
     requirement not to fake server-side state).
-  - **About** (new tab): the "Licensed To" section exactly as specified in requirements.txt
+  - **About** (new tab): the "Licensed To" section exactly as specified in REQUIREMENTS.md
     (product/version/licensed-to/license/status/valid-until/copyright), with a note that the
     license fields are placeholders pending a real licensing service (per the requirement not
     to hardcode license status as if it were server-verified).
@@ -228,7 +228,7 @@ Data layer already existed (`INITIAL_GOALS`, full `Goal`/`GoalMilestone`/`GoalCh
   `GoalDetailModal.tsx` (progress, health override, milestones checklist, linked-ticket
   linking, check-in form + history, activity feed, delete/mark-complete).
 - `Sidebar.tsx`: "Goals" nav entry (badge = active goals at-risk/behind/overdue) between My
-  Tasks and Calendar, matching the requirements.txt nav example. `App.tsx`: view wiring +
+  Tasks and Calendar, matching the REQUIREMENTS.md nav example. `App.tsx`: view wiring +
   both modals + a `5` keyboard shortcut alongside the existing `1`-`4`.
 
 **Two real bugs caught by live-testing before shipping (not left for later):**
