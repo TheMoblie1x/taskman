@@ -121,7 +121,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   };
 
   const handleResetData = () => {
-    if (confirm('Reset application to default initial seed data? Local changes will be reloaded.')) {
+    if (confirm("Reset this device's appearance, notification, and calendar preferences to their defaults? Shared workspace data is not affected.")) {
       localStorage.removeItem('kanban_collaborative_platform_v1');
       window.location.reload();
     }
@@ -767,19 +767,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           {activeTab === 'storage' && (
             <div className="space-y-4">
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 leading-relaxed">
-                All changes, tickets, projects, columns, and activities are saved locally in your browser storage with optimistic UI updates.
+                Workspaces, projects, tickets, and goals are stored in Firestore and sync in real
+                time across every device and collaborator. Appearance, notification, and calendar
+                preferences are this device's own settings.
               </div>
 
               <div className="p-4 rounded-xl border border-rose-200 bg-rose-50/50 space-y-2">
-                <div className="font-bold text-rose-800">Reset Local State</div>
+                <div className="font-bold text-rose-800">Reset This Device's Preferences</div>
                 <p className="text-[11px] text-rose-700">
-                  Restore original mock projects, tickets, and user accounts.
+                  Restores appearance, notification, and calendar settings to their defaults on
+                  this device only. Shared workspace data (projects, tickets, goals) is not affected.
                 </p>
                 <button
                   onClick={handleResetData}
                   className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-semibold"
                 >
-                  Reset to Seed Data
+                  Reset This Device
                 </button>
               </div>
             </div>

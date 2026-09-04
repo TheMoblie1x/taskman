@@ -1,0 +1,27 @@
+rules_version = '2';
+
+// Baseline for this app: every client (including this app's own UI) authenticates
+// anonymously before touching Firestore (see src/lib/firebase.ts, ensureFirebaseAuth) so
+// these rules can at least require request.auth != null — blocking direct, unauthenticated
+// access to the database from outside the app.
+//
+// IMPORTANT — this is NOT per-user/per-workspace authorization. The app's own "current user"
+// concept (the persona switcher in Settings > Account) is a UI-level convenience, not tied to
+// Firebase Auth identity, so these rules cannot check "is this the ticket's assignee" or "is
+// this user a member with edit rights on this workspace" the way requirements.txt describes
+// (Viewer/Editor/Admin/Owner permission tiers). Getting that requires wiring real Firebase
+// Authentication (e.g. Google Sign-In) in place of the persona switcher, so `request.auth.uid`
+// actually corresponds to a workspaceMembers row — tracked as a follow-up in PROGRESS.md, not
+// done here. Until then, treat this Firestore database as "shared among anyone who has this
+// app's client config", same trust boundary the app already had with a shared browser profile.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    match /{document=**} {
+      allow read, write: if signedIn();
+    }
+  }
+}

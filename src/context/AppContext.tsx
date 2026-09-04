@@ -52,6 +52,8 @@ import {
 } from '../data/seedData';
 import { applyThemeTokensToDOM, PRESET_THEMES } from '../utils/themeTokens';
 import { calculateGoalHealth, calculateGoalProgress, isGoalProgressDerived } from '../utils/goalUtils';
+import { isFirebaseConfigured, ensureFirebaseAuth } from '../lib/firebase';
+import * as repo from '../data/firestoreRepository';
 
 interface FilterState {
   assigneeId?: string | null;
@@ -233,26 +235,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Load saved state or default
   const [initialized, setInitialized] = useState(false);
 
+  // Collaborative data now lives in Firestore (see firestoreDataReady effect below) — these
+  // start empty and are populated by onSnapshot listeners, not synchronous seed constants.
   const [currentUser, setCurrentUserState] = useState<User>(INITIAL_USERS[0]);
-  const [allUsers, setAllUsers] = useState<User[]>(INITIAL_USERS);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [isGuestViewer, setIsGuestViewer] = useState<boolean>(false);
 
-  const [workspaces, setWorkspaces] = useState<Workspace[]>(INITIAL_WORKSPACES);
-  const [activeWorkspaceId, setActiveWorkspaceIdRaw] = useState<string>(INITIAL_WORKSPACES[0].id);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceIdRaw] = useState<string>(() => {
+    try {
+      return localStorage.getItem('kanban_active_workspace_id') || '';
+    } catch {
+      return '';
+    }
+  });
 
-  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>([
-    { id: 'wm_1', workspaceId: 'ws_rahul_work', user: INITIAL_USERS[0], role: 'owner', status: 'active', joinedAt: '2026-08-01' },
-    { id: 'wm_2', workspaceId: 'ws_rahul_work', user: INITIAL_USERS[1], role: 'admin', status: 'active', joinedAt: '2026-08-02' },
-    { id: 'wm_3', workspaceId: 'ws_rahul_work', user: INITIAL_USERS[2], role: 'member', status: 'active', joinedAt: '2026-08-05' },
-    { id: 'wm_4', workspaceId: 'ws_rahul_work', user: INITIAL_USERS[3], role: 'guest', status: 'active', joinedAt: '2026-08-10' },
-  ]);
+  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>([]);
 
-  const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
-  const [activeProjectId, setActiveProjectId] = useState<string>(INITIAL_PROJECTS[0].id);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<string>('');
 
-  const [boards, setBoards] = useState<Board[]>(INITIAL_BOARDS);
-  const [tickets, setTickets] = useState<Ticket[]>(INITIAL_TICKETS);
-  const [goals, setGoals] = useState<Goal[]>(INITIAL_GOALS);
+  const [boards, setBoards] = useState<Board[]>([]);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
 
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>('kanban');
@@ -260,9 +265,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filters, setFilters] = useState<FilterState>({});
 
-  const [shareLinks, setShareLinks] = useState<ShareLink[]>(INITIAL_SHARE_LINKS);
-  const [calendarConnections, setCalendarConnections] = useState<CalendarConnection[]>(INITIAL_CALENDAR_CONNECTIONS);
-  const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
+  const [shareLinks, setShareLinks] = useState<ShareLink[]>([]);
+  const [calendarConnections, setCalendarConnections] = useState<CalendarConnection[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   // Global Density Mode
   const [density, setDensityState] = useState<DensityMode>('compact');
@@ -424,23 +429,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSearchQuery('');
   }, []);
 
-  // Initialize from LocalStorage
+  // Initialize local-only settings from LocalStorage. Collaborative data (workspaces,
+  // projects, boards, tickets, goals, members, notifications, share links, calendar
+  // connections, users) lives in Firestore now — see the two effects below — and is
+  // deliberately NOT part of this blob. Appearance/notification/calendar preferences stay
+  // local-only for this pass (Phase 6 follow-up: sync them to users/{id} in Firestore too).
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const data = JSON.parse(saved);
-        if (data.workspaces) setWorkspaces(data.workspaces);
-        if (data.activeWorkspaceId) setActiveWorkspaceIdRaw(data.activeWorkspaceId);
-        if (data.projects) setProjects(data.projects);
-        if (data.activeProjectId) setActiveProjectId(data.activeProjectId);
-        if (data.boards) setBoards(data.boards);
-        if (data.tickets) setTickets(data.tickets);
-        if (data.allUsers) setAllUsers(data.allUsers);
-        if (data.workspaceMembers) setWorkspaceMembers(data.workspaceMembers);
-        if (data.shareLinks) setShareLinks(data.shareLinks);
-        if (data.calendarConnections) setCalendarConnections(data.calendarConnections);
-        if (data.notifications) setNotifications(data.notifications);
         if (data.presetTheme) setPresetThemeState(data.presetTheme);
         if (data.customColors) setCustomColorsState(data.customColors);
         if (data.fontFamily) setFontFamilyState(data.fontFamily);
@@ -449,10 +447,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (data.customThemeProfiles) setCustomThemeProfiles(data.customThemeProfiles);
         if (data.notificationSettings) setNotificationSettingsState({ ...INITIAL_NOTIFICATION_SETTINGS, ...data.notificationSettings });
         if (data.calendarSettings) setCalendarSettingsState({ ...INITIAL_CALENDAR_SETTINGS, ...data.calendarSettings });
-        if (data.goals) setGoals(data.goals);
       }
     } catch (e) {
-      console.warn('Could not load stored state:', e);
+      console.warn('Could not load stored settings:', e);
     } finally {
       // Density and theme mode each also get a small dedicated key so they're available
       // synchronously on next boot without waiting on the rest of app state to parse.
@@ -480,22 +477,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // Save to LocalStorage on changes
+  // Save local-only settings on change
   useEffect(() => {
     if (!initialized) return;
     try {
       const dataToSave = {
-        workspaces,
-        activeWorkspaceId,
-        projects,
-        activeProjectId,
-        boards,
-        tickets,
-        allUsers,
-        workspaceMembers,
-        shareLinks,
-        calendarConnections,
-        notifications,
         presetTheme,
         customColors,
         fontFamily,
@@ -504,37 +490,141 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         customThemeProfiles,
         notificationSettings,
         calendarSettings,
-        goals,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
     } catch (e) {
-      console.warn('Failed saving to localStorage', e);
+      console.warn('Failed saving settings to localStorage', e);
     }
   }, [
     initialized,
-    workspaces,
-    activeWorkspaceId,
-    projects,
-    activeProjectId,
-    boards,
-    tickets,
-    allUsers,
-    workspaceMembers,
-    shareLinks,
-    calendarConnections,
-    notifications,
     presetTheme,
     customColors,
     fontFamily,
     fontSize,
     kanbanCardSettings,
-    goals,
     customThemeProfiles,
     notificationSettings,
     calendarSettings,
   ]);
 
-  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) || workspaces[0];
+  // Remember which workspace is active locally (this browser/tab's own focus, not
+  // collaborative data) so a refresh or deep link restores it without a Firestore round trip.
+  useEffect(() => {
+    if (!activeWorkspaceId) return;
+    try {
+      localStorage.setItem('kanban_active_workspace_id', activeWorkspaceId);
+    } catch {
+      // ignore
+    }
+  }, [activeWorkspaceId]);
+
+  // Once workspaces have loaded, make sure activeWorkspaceId actually points at one of them
+  // (first run with nothing in localStorage yet, or a stale id from a workspace that no
+  // longer exists both land here).
+  useEffect(() => {
+    if (workspaces.length === 0) return;
+    if (!activeWorkspaceId || !workspaces.some((w) => w.id === activeWorkspaceId)) {
+      setActiveWorkspaceIdRaw(workspaces[0].id);
+    }
+  }, [workspaces, activeWorkspaceId]);
+
+  // ---- Firestore: auth, one-time seed, and collections that aren't workspace-scoped ----
+  // (workspaces themselves, users, projects, boards, share links, calendar connections —
+  // the app has always kept these as one in-memory pool filtered client-side per workspace,
+  // same as before; only where the data now comes from has changed.)
+  useEffect(() => {
+    if (!isFirebaseConfigured) {
+      console.warn(
+        'Firebase is not configured (missing VITE_FIREBASE_* env vars) — using local seed data. Nothing will sync or persist across reloads.'
+      );
+      setWorkspaces(INITIAL_WORKSPACES);
+      setAllUsers(INITIAL_USERS);
+      setProjects(INITIAL_PROJECTS);
+      setBoards(INITIAL_BOARDS);
+      setShareLinks(INITIAL_SHARE_LINKS);
+      setCalendarConnections(INITIAL_CALENDAR_CONNECTIONS);
+      setWorkspaceMembers([
+        { id: 'wm_1', workspaceId: 'ws_rahul_work', user: INITIAL_USERS[0], role: 'owner', status: 'active', joinedAt: '2026-08-01' },
+        { id: 'wm_2', workspaceId: 'ws_rahul_work', user: INITIAL_USERS[1], role: 'admin', status: 'active', joinedAt: '2026-08-02' },
+        { id: 'wm_3', workspaceId: 'ws_rahul_work', user: INITIAL_USERS[2], role: 'member', status: 'active', joinedAt: '2026-08-05' },
+        { id: 'wm_4', workspaceId: 'ws_rahul_work', user: INITIAL_USERS[3], role: 'guest', status: 'active', joinedAt: '2026-08-10' },
+      ]);
+      setTickets(INITIAL_TICKETS);
+      setGoals(INITIAL_GOALS);
+      setNotifications(INITIAL_NOTIFICATIONS);
+      return;
+    }
+
+    let cancelled = false;
+    const unsubscribers: Array<() => void> = [];
+
+    (async () => {
+      await ensureFirebaseAuth();
+      if (cancelled) return;
+
+      try {
+        await repo.seedFirestoreIfEmpty({
+          workspaces: INITIAL_WORKSPACES,
+          workspaceMembers: [
+            { id: 'wm_1', workspaceId: 'ws_rahul_work', user: INITIAL_USERS[0], role: 'owner', status: 'active', joinedAt: '2026-08-01' },
+            { id: 'wm_2', workspaceId: 'ws_rahul_work', user: INITIAL_USERS[1], role: 'admin', status: 'active', joinedAt: '2026-08-02' },
+            { id: 'wm_3', workspaceId: 'ws_rahul_work', user: INITIAL_USERS[2], role: 'member', status: 'active', joinedAt: '2026-08-05' },
+            { id: 'wm_4', workspaceId: 'ws_rahul_work', user: INITIAL_USERS[3], role: 'guest', status: 'active', joinedAt: '2026-08-10' },
+          ],
+          projects: INITIAL_PROJECTS,
+          boards: INITIAL_BOARDS,
+          tickets: INITIAL_TICKETS,
+          goals: INITIAL_GOALS,
+          notifications: INITIAL_NOTIFICATIONS,
+          shareLinks: INITIAL_SHARE_LINKS,
+          calendarConnections: INITIAL_CALENDAR_CONNECTIONS,
+          users: INITIAL_USERS,
+        });
+      } catch (e) {
+        console.error('Firestore seed failed (likely a permissions/rules issue):', e);
+      }
+
+      if (cancelled) return;
+
+      unsubscribers.push(repo.subscribeWorkspaces(setWorkspaces));
+      unsubscribers.push(repo.subscribeUsers(setAllUsers));
+      unsubscribers.push(repo.subscribeAllProjects(setProjects));
+      unsubscribers.push(repo.subscribeAllBoards(setBoards));
+      unsubscribers.push(repo.subscribeAllShareLinks(setShareLinks));
+      unsubscribers.push(repo.subscribeAllCalendarConnections(setCalendarConnections));
+    })();
+
+    return () => {
+      cancelled = true;
+      unsubscribers.forEach((u) => u());
+    };
+  }, []);
+
+  // ---- Firestore: workspace-scoped collections — re-subscribed whenever the active
+  // workspace changes. Cleanly tearing down the previous workspace's listeners first (the
+  // effect cleanup below) is exactly what stops stale data from a prior workspace appearing.
+  useEffect(() => {
+    if (!isFirebaseConfigured || !activeWorkspaceId) return;
+
+    const unsubMembers = repo.subscribeWorkspaceMembers(activeWorkspaceId, setWorkspaceMembers);
+    const unsubTickets = repo.subscribeWorkspaceTickets(activeWorkspaceId, setTickets);
+    const unsubGoals = repo.subscribeWorkspaceGoals(activeWorkspaceId, setGoals);
+    const unsubNotifications = repo.subscribeWorkspaceNotifications(activeWorkspaceId, setNotifications);
+
+    return () => {
+      unsubMembers();
+      unsubTickets();
+      unsubGoals();
+      unsubNotifications();
+    };
+  }, [activeWorkspaceId]);
+
+  // Safe empty placeholder while Firestore's first snapshot is still in flight — every
+  // downstream .filter(w => w.workspaceId === activeWorkspace.id) below just yields an empty
+  // array against it (id: '' never matches a real record), so the app renders its normal
+  // empty states for a moment instead of crashing on `activeWorkspace` being undefined.
+  const activeWorkspace: Workspace =
+    workspaces.find((w) => w.id === activeWorkspaceId) || workspaces[0] || { id: '', name: '', ownerId: '', createdAt: '' };
 
   // Workspace-scoped derived data. activeWorkspaceId is the single source of truth here —
   // every workspace-scoped view should read from these instead of the raw top-level arrays.
@@ -573,6 +663,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
       setWorkspaces((prev) => [...prev, newWs]);
       setActiveWorkspaceId(newWs.id);
+      if (isFirebaseConfigured) repo.saveWorkspace(newWs).catch((e) => console.error('saveWorkspace failed:', e));
+
+      // The creator is always the workspace's first member (pre-existing gap: this was never
+      // recorded before, which security rules built on workspace membership now depend on).
+      const ownerMember: WorkspaceMember = {
+        id: `wm_${Date.now()}`,
+        workspaceId: newWs.id,
+        user: currentUser,
+        role: 'owner',
+        status: 'active',
+        joinedAt: new Date().toISOString(),
+      };
+      setWorkspaceMembers((prev) => [...prev, ownerMember]);
+      if (isFirebaseConfigured) repo.saveWorkspaceMember(ownerMember).catch((e) => console.error('saveWorkspaceMember failed:', e));
 
       // Add default project for new workspace
       const newProj: Project = {
@@ -588,6 +692,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
       setProjects((prev) => [...prev, newProj]);
       setActiveProjectId(newProj.id);
+      if (isFirebaseConfigured) repo.saveProject(newProj).catch((e) => console.error('saveProject failed:', e));
 
       // Add default board
       const newBoard: Board = {
@@ -604,6 +709,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createdAt: new Date().toISOString(),
       };
       setBoards((prev) => [...prev, newBoard]);
+      if (isFirebaseConfigured) repo.saveBoard(newBoard).catch((e) => console.error('saveBoard failed:', e));
     },
     [currentUser.id]
   );
@@ -623,43 +729,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (!existingUser) {
         setAllUsers((prev) => [...prev, invitedUser]);
+        if (isFirebaseConfigured) repo.saveUser(invitedUser).catch((e) => console.error('saveUser failed:', e));
       }
 
-      setWorkspaceMembers((prev) => [
-        ...prev,
-        {
-          id: `wm_${Date.now()}`,
-          workspaceId: activeWorkspace.id,
-          user: invitedUser,
-          role,
-          status: 'invited',
-          joinedAt: new Date().toISOString(),
-        },
-      ]);
+      const newMember: WorkspaceMember = {
+        id: `wm_${Date.now()}`,
+        workspaceId: activeWorkspace.id,
+        user: invitedUser,
+        role,
+        status: 'invited',
+        joinedAt: new Date().toISOString(),
+      };
+      setWorkspaceMembers((prev) => [...prev, newMember]);
+      if (isFirebaseConfigured) repo.saveWorkspaceMember(newMember).catch((e) => console.error('saveWorkspaceMember failed:', e));
 
       // Add in-app notification
-      setNotifications((prev) => [
-        {
-          id: `notif_${Date.now()}`,
-          userId: currentUser.id,
-          workspaceId: activeWorkspace.id,
-          title: 'Invitation Sent',
-          message: `Invited ${email} as ${role} to ${activeWorkspace.name}.`,
-          type: 'invite',
-          read: false,
-          createdAt: new Date().toISOString(),
-        },
-        ...prev,
-      ]);
+      const newNotif: AppNotification = {
+        id: `notif_${Date.now()}`,
+        userId: currentUser.id,
+        workspaceId: activeWorkspace.id,
+        title: 'Invitation Sent',
+        message: `Invited ${email} as ${role} to ${activeWorkspace.name}.`,
+        type: 'invite',
+        read: false,
+        createdAt: new Date().toISOString(),
+      };
+      setNotifications((prev) => [newNotif, ...prev]);
+      if (isFirebaseConfigured) repo.saveNotification(newNotif).catch((e) => console.error('saveNotification failed:', e));
     },
     [activeWorkspace, allUsers, currentUser.id]
   );
 
-  const updateMemberRole = useCallback((userId: string, role: WorkspaceRole) => {
-    setWorkspaceMembers((prev) =>
-      prev.map((m) => (m.user.id === userId ? { ...m, role, user: { ...m.user, role } } : m))
-    );
-  }, []);
+  const updateMemberRole = useCallback(
+    (userId: string, role: WorkspaceRole) => {
+      const member = workspaceMembers.find((m) => m.user.id === userId);
+      if (!member) return;
+      const updated: WorkspaceMember = { ...member, role, user: { ...member.user, role } };
+      setWorkspaceMembers((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+      if (isFirebaseConfigured) repo.saveWorkspaceMember(updated).catch((e) => console.error('saveWorkspaceMember failed:', e));
+    },
+    [workspaceMembers]
+  );
 
   // Create Project
   const createProject = useCallback(
@@ -710,9 +820,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         position: activeBoard.columns.length,
         wipLimit: wipLimit ?? null,
       };
-      setBoards((prev) =>
-        prev.map((b) => (b.id === activeBoard.id ? { ...b, columns: [...b.columns, newCol] } : b))
-      );
+      const columns = [...activeBoard.columns, newCol];
+      setBoards((prev) => prev.map((b) => (b.id === activeBoard.id ? { ...b, columns } : b)));
+      if (isFirebaseConfigured) repo.updateBoard(activeBoard.id, { columns }).catch((e) => console.error('updateBoard failed:', e));
     },
     [activeBoard]
   );
@@ -720,16 +830,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateColumn = useCallback(
     (columnId: string, updates: Partial<BoardColumn>) => {
       if (!activeBoard) return;
-      setBoards((prev) =>
-        prev.map((b) =>
-          b.id === activeBoard.id
-            ? {
-                ...b,
-                columns: b.columns.map((col) => (col.id === columnId ? { ...col, ...updates } : col)),
-              }
-            : b
-        )
-      );
+      const columns = activeBoard.columns.map((col) => (col.id === columnId ? { ...col, ...updates } : col));
+      setBoards((prev) => prev.map((b) => (b.id === activeBoard.id ? { ...b, columns } : b)));
+      if (isFirebaseConfigured) repo.updateBoard(activeBoard.id, { columns }).catch((e) => console.error('updateBoard failed:', e));
     },
     [activeBoard]
   );
@@ -737,16 +840,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteColumn = useCallback(
     (columnId: string) => {
       if (!activeBoard) return;
-      setBoards((prev) =>
-        prev.map((b) =>
-          b.id === activeBoard.id
-            ? {
-                ...b,
-                columns: b.columns.filter((c) => c.id !== columnId),
-              }
-            : b
-        )
-      );
+      const columns = activeBoard.columns.filter((c) => c.id !== columnId);
+      setBoards((prev) => prev.map((b) => (b.id === activeBoard.id ? { ...b, columns } : b)));
+      if (isFirebaseConfigured) repo.updateBoard(activeBoard.id, { columns }).catch((e) => console.error('updateBoard failed:', e));
     },
     [activeBoard]
   );
@@ -781,6 +877,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const newTicket: Ticket = {
         id: `tkt_${Date.now()}`,
+        workspaceId: activeWorkspace.id,
         projectId: activeProject.id,
         boardId: activeBoard.id,
         ticketNumber: nextNumber,
@@ -830,25 +927,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
 
         // Trigger notification for assignee
-        setNotifications((prev) => [
-          {
-            id: `notif_${Date.now()}`,
-            userId: data.assigneeId!,
-            workspaceId: activeWorkspace.id,
-            title: 'New Ticket Assigned',
-            message: `${currentUser.name} assigned ${activeProject.key}-${nextNumber} to you: "${data.title}"`,
-            type: 'assigned',
-            ticketId: newTicket.id,
-            ticketKey: `${activeProject.key}-${nextNumber}`,
-            projectId: activeProject.id,
-            read: false,
-            createdAt: new Date().toISOString(),
-          },
-          ...prev,
-        ]);
+        const newNotif: AppNotification = {
+          id: `notif_${Date.now()}`,
+          userId: data.assigneeId!,
+          workspaceId: activeWorkspace.id,
+          title: 'New Ticket Assigned',
+          message: `${currentUser.name} assigned ${activeProject.key}-${nextNumber} to you: "${data.title}"`,
+          type: 'assigned',
+          ticketId: newTicket.id,
+          ticketKey: `${activeProject.key}-${nextNumber}`,
+          projectId: activeProject.id,
+          read: false,
+          createdAt: new Date().toISOString(),
+        };
+        setNotifications((prev) => [newNotif, ...prev]);
+        if (isFirebaseConfigured) repo.saveNotification(newNotif).catch((e) => console.error('saveNotification failed:', e));
       }
 
       setTickets((prev) => [newTicket, ...prev]);
+      if (isFirebaseConfigured) repo.saveTicket(newTicket).catch((e) => console.error('saveTicket failed:', e));
       return newTicket;
     },
     [activeBoard, activeProject, activeWorkspace, allUsers, currentUser, tickets]
@@ -857,141 +954,140 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Update ticket with activity tracking
   const updateTicket = useCallback(
     (ticketId: string, updates: Partial<Ticket>, logAction?: string) => {
-      setTickets((prev) =>
-        prev.map((t) => {
-          if (t.id !== ticketId) return t;
+      const t = tickets.find((tk) => tk.id === ticketId);
+      if (!t) return;
 
-          const updatedTicket = { ...t, ...updates, updatedAt: new Date().toISOString(), version: t.version + 1 };
+      const updatedTicket: Ticket = { ...t, ...updates, updatedAt: new Date().toISOString(), version: t.version + 1 };
 
-          // Build activity item if action provided
-          if (logAction) {
-            const newAct: Activity = {
-              id: `act_${Date.now()}`,
-              ticketId,
-              userId: currentUser.id,
-              userName: currentUser.name,
-              userAvatar: currentUser.avatarUrl,
-              action: logAction,
-              createdAt: new Date().toISOString(),
-            };
-            updatedTicket.activity = [...t.activity, newAct];
-          }
+      if (logAction) {
+        const newAct: Activity = {
+          id: `act_${Date.now()}`,
+          ticketId,
+          userId: currentUser.id,
+          userName: currentUser.name,
+          userAvatar: currentUser.avatarUrl,
+          action: logAction,
+          createdAt: new Date().toISOString(),
+        };
+        updatedTicket.activity = [...t.activity, newAct];
+      }
 
-          // If assignee changed, notify
-          if (updates.assigneeId && updates.assigneeId !== t.assigneeId && updates.assigneeId !== currentUser.id) {
-            const assignee = allUsers.find((u) => u.id === updates.assigneeId);
-            setNotifications((n) => [
-              {
-                id: `notif_${Date.now()}`,
-                userId: updates.assigneeId!,
-                workspaceId: activeWorkspace.id,
-                title: 'Ticket Assigned',
-                message: `${currentUser.name} assigned ${activeProject?.key || 'TKT'}-${t.ticketNumber} to you`,
-                type: 'assigned',
-                ticketId: t.id,
-                ticketKey: `${activeProject?.key || 'TKT'}-${t.ticketNumber}`,
-                projectId: t.projectId,
-                read: false,
-                createdAt: new Date().toISOString(),
-              },
-              ...n,
-            ]);
-          }
+      // setState updaters must stay pure (React/StrictMode may invoke them twice) — compute
+      // everything above first, then apply the single state update and the Firestore write
+      // as plain sibling statements below, never nested inside another updater.
+      setTickets((prev) => prev.map((tk) => (tk.id === ticketId ? updatedTicket : tk)));
+      if (isFirebaseConfigured) repo.updateTicketDoc(ticketId, updatedTicket).catch((e) => console.error('updateTicketDoc failed:', e));
 
-          return updatedTicket;
-        })
-      );
+      // If assignee changed, notify
+      if (updates.assigneeId && updates.assigneeId !== t.assigneeId && updates.assigneeId !== currentUser.id) {
+        const newNotif: AppNotification = {
+          id: `notif_${Date.now()}`,
+          userId: updates.assigneeId,
+          workspaceId: activeWorkspace.id,
+          title: 'Ticket Assigned',
+          message: `${currentUser.name} assigned ${activeProject?.key || 'TKT'}-${t.ticketNumber} to you`,
+          type: 'assigned',
+          ticketId: t.id,
+          ticketKey: `${activeProject?.key || 'TKT'}-${t.ticketNumber}`,
+          projectId: t.projectId,
+          read: false,
+          createdAt: new Date().toISOString(),
+        };
+        setNotifications((n) => [newNotif, ...n]);
+        if (isFirebaseConfigured) repo.saveNotification(newNotif).catch((e) => console.error('saveNotification failed:', e));
+      }
     },
-    [activeProject, activeWorkspace, allUsers, currentUser]
+    [tickets, activeProject, activeWorkspace, currentUser]
   );
 
   // Move ticket (Kanban drag & drop)
   const moveTicket = useCallback(
     (ticketId: string, targetStatus: string, newPosition?: number) => {
-      setTickets((prev) => {
-        const targetTicket = prev.find((t) => t.id === ticketId);
-        if (!targetTicket) return prev;
+      const t = tickets.find((tk) => tk.id === ticketId);
+      if (!t) return;
 
-        const oldStatus = targetTicket.status;
-        const statusChanged = oldStatus !== targetStatus;
-
-        return prev.map((t) => {
-          if (t.id === ticketId) {
-            const isCompleted = targetStatus === 'DONE';
-            const acts = [...t.activity];
-            if (statusChanged) {
-              acts.push({
-                id: `act_move_${Date.now()}`,
-                ticketId: t.id,
-                userId: currentUser.id,
-                userName: currentUser.name,
-                userAvatar: currentUser.avatarUrl,
-                action: `moved ticket from ${oldStatus} to ${targetStatus}`,
-                metadata: { from: oldStatus, to: targetStatus },
-                createdAt: new Date().toISOString(),
-              });
-            }
-
-            return {
-              ...t,
-              status: targetStatus,
-              position: newPosition !== undefined ? newPosition : t.position,
-              completedAt: isCompleted && !t.completedAt ? new Date().toISOString() : (!isCompleted ? null : t.completedAt),
-              updatedAt: new Date().toISOString(),
-              version: t.version + 1,
-              activity: acts,
-            };
-          }
-          return t;
+      const oldStatus = t.status;
+      const statusChanged = oldStatus !== targetStatus;
+      const isCompleted = targetStatus === 'DONE';
+      const acts = [...t.activity];
+      if (statusChanged) {
+        acts.push({
+          id: `act_move_${Date.now()}`,
+          ticketId: t.id,
+          userId: currentUser.id,
+          userName: currentUser.name,
+          userAvatar: currentUser.avatarUrl,
+          action: `moved ticket from ${oldStatus} to ${targetStatus}`,
+          metadata: { from: oldStatus, to: targetStatus },
+          createdAt: new Date().toISOString(),
         });
-      });
+      }
+
+      const updatedTicket: Ticket = {
+        ...t,
+        status: targetStatus,
+        position: newPosition !== undefined ? newPosition : t.position,
+        completedAt: isCompleted && !t.completedAt ? new Date().toISOString() : (!isCompleted ? null : t.completedAt),
+        updatedAt: new Date().toISOString(),
+        version: t.version + 1,
+        activity: acts,
+      };
+
+      setTickets((prev) => prev.map((tk) => (tk.id === ticketId ? updatedTicket : tk)));
+      if (isFirebaseConfigured) repo.updateTicketDoc(ticketId, updatedTicket).catch((e) => console.error('updateTicketDoc failed:', e));
     },
-    [currentUser]
+    [tickets, currentUser]
   );
 
   const moveTickets = useCallback(
     (ticketIds: string[], targetStatus: string) => {
       if (!ticketIds || ticketIds.length === 0) return;
-      setTickets((prev) => {
-        const now = new Date().toISOString();
-        const isCompleted = targetStatus === 'DONE';
-        return prev.map((t) => {
-          if (ticketIds.includes(t.id)) {
-            const oldStatus = t.status;
-            const statusChanged = oldStatus !== targetStatus;
-            const acts = [...t.activity];
-            if (statusChanged) {
-              acts.push({
-                id: `act_bulk_move_${Date.now()}_${t.id}`,
-                ticketId: t.id,
-                userId: currentUser.id,
-                userName: currentUser.name,
-                userAvatar: currentUser.avatarUrl,
-                action: `moved ticket from ${oldStatus} to ${targetStatus} (bulk move)`,
-                metadata: { from: oldStatus, to: targetStatus },
-                createdAt: now,
-              });
-            }
-            return {
-              ...t,
-              status: targetStatus,
-              completedAt: isCompleted && !t.completedAt ? now : (!isCompleted ? null : t.completedAt),
-              updatedAt: now,
-              version: t.version + 1,
-              activity: acts,
-            };
-          }
-          return t;
+      const now = new Date().toISOString();
+      const isCompleted = targetStatus === 'DONE';
+      const updatedById = new Map<string, Ticket>();
+
+      for (const t of tickets) {
+        if (!ticketIds.includes(t.id)) continue;
+        const oldStatus = t.status;
+        const statusChanged = oldStatus !== targetStatus;
+        const acts = [...t.activity];
+        if (statusChanged) {
+          acts.push({
+            id: `act_bulk_move_${Date.now()}_${t.id}`,
+            ticketId: t.id,
+            userId: currentUser.id,
+            userName: currentUser.name,
+            userAvatar: currentUser.avatarUrl,
+            action: `moved ticket from ${oldStatus} to ${targetStatus} (bulk move)`,
+            metadata: { from: oldStatus, to: targetStatus },
+            createdAt: now,
+          });
+        }
+        updatedById.set(t.id, {
+          ...t,
+          status: targetStatus,
+          completedAt: isCompleted && !t.completedAt ? now : (!isCompleted ? null : t.completedAt),
+          updatedAt: now,
+          version: t.version + 1,
+          activity: acts,
         });
-      });
+      }
+
+      setTickets((prev) => prev.map((t) => updatedById.get(t.id) || t));
+      if (isFirebaseConfigured) {
+        updatedById.forEach((updated, id) => {
+          repo.updateTicketDoc(id, updated).catch((e) => console.error('updateTicketDoc failed:', e));
+        });
+      }
       setSelectedTicketIds([]);
     },
-    [currentUser]
+    [tickets, currentUser]
   );
 
   const deleteTicket = useCallback((ticketId: string) => {
     setTickets((prev) => prev.filter((t) => t.id !== ticketId));
     setSelectedTicketId((curr) => (curr === ticketId ? null : curr));
+    if (isFirebaseConfigured) repo.deleteTicketDoc(ticketId).catch((e) => console.error('deleteTicketDoc failed:', e));
   }, []);
 
   // ---- SMART Goals ----
@@ -1051,7 +1147,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createdAt: now,
         updatedAt: now,
       };
-      setGoals((prev) => [recalcHealth(newGoal), ...prev]);
+      const savedGoal = recalcHealth(newGoal);
+      setGoals((prev) => [savedGoal, ...prev]);
+      if (isFirebaseConfigured) repo.saveGoal(savedGoal).catch((e) => console.error('saveGoal failed:', e));
       return newGoal;
     },
     [activeWorkspace.id, currentUser.id, recalcHealth]
@@ -1059,22 +1157,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateGoal = useCallback(
     (goalId: string, updates: Partial<Goal>, logAction?: string) => {
-      setGoals((prev) =>
-        prev.map((g) => {
-          if (g.id !== goalId) return g;
-          let updated: Goal = { ...g, ...updates, updatedAt: new Date().toISOString() };
-          if (logAction) {
-            updated.activity = [...g.activity, { id: `gact_${Date.now()}`, goalId, action: logAction, createdAt: new Date().toISOString() }];
-          }
-          return recalcHealth(updated);
-        })
-      );
+      const g = goals.find((gl) => gl.id === goalId);
+      if (!g) return;
+      let updated: Goal = { ...g, ...updates, updatedAt: new Date().toISOString() };
+      if (logAction) {
+        updated.activity = [...g.activity, { id: `gact_${Date.now()}`, goalId, action: logAction, createdAt: new Date().toISOString() }];
+      }
+      updated = recalcHealth(updated);
+      setGoals((prev) => prev.map((gl) => (gl.id === goalId ? updated : gl)));
+      if (isFirebaseConfigured) repo.updateGoalDoc(goalId, updated).catch((e) => console.error('updateGoalDoc failed:', e));
     },
-    [recalcHealth]
+    [goals, recalcHealth]
   );
 
   const deleteGoal = useCallback((goalId: string) => {
     setGoals((prev) => prev.filter((g) => g.id !== goalId));
+    if (isFirebaseConfigured) repo.deleteGoalDoc(goalId).catch((e) => console.error('deleteGoalDoc failed:', e));
   }, []);
 
   const updateGoalProgress = useCallback(
@@ -1276,22 +1374,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const mentionedName = m.substring(1).toLowerCase();
           const matchedUser = allUsers.find((u) => u.name.toLowerCase().includes(mentionedName));
           if (matchedUser && matchedUser.id !== currentUser.id) {
-            setNotifications((prev) => [
-              {
-                id: `notif_ment_${Date.now()}`,
-                userId: matchedUser.id,
-                workspaceId: activeWorkspace.id,
-                title: 'You were mentioned',
-                message: `${currentUser.name} mentioned you in ${activeProject?.key || 'Ticket'}-${currentTicket.ticketNumber}`,
-                type: 'mention',
-                ticketId: currentTicket.id,
-                ticketKey: `${activeProject?.key || 'TKT'}-${currentTicket.ticketNumber}`,
-                projectId: currentTicket.projectId,
-                read: false,
-                createdAt: new Date().toISOString(),
-              },
-              ...prev,
-            ]);
+            const mentionNotif: AppNotification = {
+              id: `notif_ment_${Date.now()}`,
+              userId: matchedUser.id,
+              workspaceId: activeWorkspace.id,
+              title: 'You were mentioned',
+              message: `${currentUser.name} mentioned you in ${activeProject?.key || 'Ticket'}-${currentTicket.ticketNumber}`,
+              type: 'mention',
+              ticketId: currentTicket.id,
+              ticketKey: `${activeProject?.key || 'TKT'}-${currentTicket.ticketNumber}`,
+              projectId: currentTicket.projectId,
+              read: false,
+              createdAt: new Date().toISOString(),
+            };
+            setNotifications((prev) => [mentionNotif, ...prev]);
+            if (isFirebaseConfigured) repo.saveNotification(mentionNotif).catch((e) => console.error('saveNotification failed:', e));
           }
         });
       }
@@ -1372,6 +1469,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createdAt: new Date().toISOString(),
       };
       setShareLinks((prev) => [newLink, ...prev]);
+      if (isFirebaseConfigured) repo.saveShareLink(newLink).catch((e) => console.error('saveShareLink failed:', e));
       return newLink;
     },
     [currentUser.id]
@@ -1379,47 +1477,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const revokeShareLink = useCallback((linkId: string) => {
     setShareLinks((prev) => prev.map((l) => (l.id === linkId ? { ...l, isActive: false } : l)));
+    if (isFirebaseConfigured) repo.updateShareLinkDoc(linkId, { isActive: false }).catch((e) => console.error('updateShareLinkDoc failed:', e));
   }, []);
 
   // Calendar connections toggle
-  const toggleCalendarConnection = useCallback((provider: 'google' | 'microsoft') => {
-    setCalendarConnections((prev) =>
-      prev.map((c) =>
-        c.provider === provider
-          ? { ...c, connected: !c.connected, lastSyncedAt: new Date().toISOString() }
-          : c
-      )
-    );
-  }, []);
+  const toggleCalendarConnection = useCallback(
+    (provider: 'google' | 'microsoft') => {
+      const conn = calendarConnections.find((c) => c.provider === provider);
+      if (!conn) return;
+      const updated: CalendarConnection = { ...conn, connected: !conn.connected, lastSyncedAt: new Date().toISOString() };
+      setCalendarConnections((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      if (isFirebaseConfigured) repo.saveCalendarConnection(updated).catch((e) => console.error('saveCalendarConnection failed:', e));
+    },
+    [calendarConnections]
+  );
 
   // Notifications
   const markNotificationRead = useCallback((id: string) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    if (isFirebaseConfigured) repo.updateNotificationDoc(id, { read: true }).catch((e) => console.error('updateNotificationDoc failed:', e));
   }, []);
 
   const markAllNotificationsRead = useCallback(() => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  }, []);
+    if (isFirebaseConfigured) {
+      notifications.filter((n) => !n.read).forEach((n) => {
+        repo.updateNotificationDoc(n.id, { read: true }).catch((e) => console.error('updateNotificationDoc failed:', e));
+      });
+    }
+  }, [notifications]);
 
   const resetFilters = useCallback(() => {
     setFilters({});
     setSearchQuery('');
   }, []);
 
+  // Collaborative data (workspaces/projects/tickets/goals/...) now lives in shared Firestore,
+  // not this browser's localStorage — resetting it is no longer a private, low-stakes,
+  // one-click action (it could wipe other collaborators' real data), so this only resets
+  // this device's own local preferences back to default, not the shared dataset. Wiping/
+  // reseeding Firestore itself is intentionally left as a manual, deliberate action (see
+  // PROGRESS.md Phase 6) rather than something a single confirm() dialog can trigger.
   const resetToDefaults = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
-    setWorkspaces(INITIAL_WORKSPACES);
-    setActiveWorkspaceId(INITIAL_WORKSPACES[0].id);
-    setProjects(INITIAL_PROJECTS);
-    setActiveProjectId(INITIAL_PROJECTS[0].id);
-    setBoards(INITIAL_BOARDS);
-    setTickets(INITIAL_TICKETS);
-    setGoals(INITIAL_GOALS);
-    setAllUsers(INITIAL_USERS);
-    setCurrentUserState(INITIAL_USERS[0]);
-    setNotifications(INITIAL_NOTIFICATIONS);
-    setCalendarConnections(INITIAL_CALENDAR_CONNECTIONS);
-    setShareLinks(INITIAL_SHARE_LINKS);
     setIsGuestViewer(false);
     resetAppearance();
     setCustomThemeProfiles([]);

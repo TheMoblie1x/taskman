@@ -245,13 +245,83 @@ Verified: `npm run lint` + `npm run build` clean; full live walkthrough (dashboa
 seeded goal → toggle a milestone → health auto-updates → full 6-step creation wizard → new
 goal appears and opens → deleted the test goal). No console errors.
 
-## Phase 6 — Firestore persistence & sync layer — ⬜ BLOCKED
+## Phase 6 — Firestore persistence & sync layer — 🟡 CODE DONE, BLOCKED ON 2 CONSOLE STEPS
 
-Asked the user for a Firestore project; they're creating a new Firebase project and will come
-back with the ID (and database ID, if using a named database — default is usually fine).
-Still blocked until that arrives. Also a large architectural addition (repository layer,
-offline queue, security rules) — do this last, now that the UI-facing phases are settled and
-the data shape (Goals included) has stabilized.
+User created a Firebase project ("taskman", id `taskman-1c28f`) and gave the web SDK config
+(now in `.env.local`, gitignored — `.env.example` documents the `VITE_FIREBASE_*` vars).
+
+**Architecture:**
+- `src/lib/firebase.ts` — initializes the app, Firestore (with `persistentLocalCache` +
+  `persistentMultipleTabManager` — this **is** the offline-first layer; deliberately not
+  hand-rolling a mutation queue, since Firestore's own local cache already gives optimistic
+  local writes, automatic reconnect sync, and multi-tab consistency), and anonymous Auth.
+- `src/data/firestoreRepository.ts` — the only module that imports the Firestore SDK directly.
+  Flat, top-level collections (`workspaces`, `projects`, `boards`, `tickets`, `goals`,
+  `workspaceMembers`, `notifications`, `shareLinks`, `calendarConnections`, `users`), each
+  workspace-scoped row carrying a `workspaceId` field, queried with `where(...)` rather than
+  requirements.txt's suggested `workspaces/{id}/projects/{id}/tickets/{id}` nesting — the doc
+  itself says structure can be adjusted for query needs, and flat collections map directly
+  onto the app's existing `workspaceProjects`/`workspaceTickets`/... selectors with zero
+  changes to any UI component. Ticket/Goal sub-entities (comments, subtasks, milestones,
+  check-ins, activity) stay embedded arrays on the parent doc, exactly as already in memory.
+  `seedFirestoreIfEmpty` writes the local `INITIAL_*` seed data in on first run.
+- `AppContext.tsx`: `workspaces`/`allUsers`/`projects`/`boards`/`shareLinks`/
+  `calendarConnections` are global `onSnapshot` subscriptions (mount once); `workspaceMembers`/
+  `tickets`/`goals`/`notifications` are re-subscribed whenever `activeWorkspaceId` changes,
+  with the previous workspace's listeners torn down first in the effect cleanup — the literal
+  mechanism requirements.txt describes for "no stale data from the previous workspace." Every
+  mutation function (createTicket, updateTicket, moveTicket(s), createGoal, updateGoal and
+  everything that funnels through it — milestones/check-ins/ticket-linking, column edits,
+  invites, share links, calendar connections, notifications) now also writes to Firestore
+  alongside its existing local `setState`; the onSnapshot listeners are what other
+  tabs/collaborators see.
+- Added `Ticket.workspaceId` on creation (was only ever set in seed data before — needed so
+  the scoped ticket query actually matches newly-created tickets) and a `WorkspaceMember` for
+  a workspace's creator (was silently never created before; needed for any future membership-
+  based security rules).
+- **StrictMode correctness fix, found while wiring this up**: `updateTicket` had a `setState`
+  call nested inside another `setState`'s updater function (`setNotifications` inside
+  `setTickets(prev => prev.map(...))`) — a real, pre-existing bug: React StrictMode
+  double-invokes updater functions in dev, so this was already silently creating **duplicate
+  notifications** on every assignee change, unrelated to Firestore. Fixed by computing the
+  updated ticket/notification objects first, then applying `setState` + the Firestore write as
+  plain sibling statements, never nested — the pattern used throughout this phase's new code.
+- `resetToDefaults` (Settings > Data & Storage) no longer resets the collaborative dataset —
+  it's shared Firestore data now, not this browser's localStorage, so a single confirm() click
+  wiping it is a real risk to other collaborators' data, not a low-stakes convenience. It now
+  only resets this device's own appearance/notification/calendar preferences; copy in
+  `SettingsModal.tsx` updated to say so plainly. Wiping/reseeding the live database is left as
+  a deliberate manual action, not a button.
+- `firestore.rules` written (repo root) — requires `request.auth != null` for all access.
+  **Explicitly not real per-user authorization**: the app's persona switcher isn't tied to
+  Firebase Auth identity, so these rules can't check workspace membership/role the way
+  requirements.txt's Viewer/Editor/Admin/Owner tiers describe — that needs real Firebase Auth
+  (e.g. Google Sign-In) replacing the persona switcher, which is a separate, substantial
+  feature, not done here. Rules are also not deployed yet — no Firebase CLI in this
+  environment, and deploying needs the user's own authenticated `firebase login` — needs to
+  be pasted into Console > Firestore Database > Rules manually (see below).
+
+**Deferred** (documented, not forgotten): appearance/notification/calendar *settings* stay in
+this device's localStorage rather than syncing via a `users/{id}` Firestore doc — requirements.txt
+asks for cross-device settings sync, but touching the Phase 3/4 Settings state again on top of
+this already-large rewrite was cut to keep blast radius manageable. The `saveUserPreferences`
+helper already exists in the repository layer for whenever this gets picked up.
+
+Verified: `npm run lint` + `npm run build` both pass clean.
+
+**Live-tested and confirmed exactly two things are blocking it** (both need the user, in the
+Firebase console — I don't have access to do either):
+1. **Enable Anonymous Authentication**: Console > Authentication > Sign-in method > Anonymous
+   > Enable. Right now every `signInAnonymously` call fails with
+   `auth/admin-restricted-operation`.
+2. **Publish the security rules**: Console > Firestore Database > Rules > paste the contents
+   of `firestore.rules` > Publish. Without auth succeeding (step 1) this doesn't matter yet,
+   but both are needed — right now every read/write fails with "Missing or insufficient
+   permissions" (expected: Firestore denies everything by default until rules explicitly
+   allow it).
+
+The app degrades safely without these — no crash, just empty boards/lists (confirmed live) —
+but nothing will actually persist or sync until both are done.
 
 ---
 ### How to resume
