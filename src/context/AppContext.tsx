@@ -31,6 +31,10 @@ import {
   CustomThemeProfile,
   NotificationSettings,
   CalendarSettings,
+  Goal,
+  GoalMilestone,
+  GoalCheckIn,
+  GoalMeasurementType,
 } from '../types';
 import {
   INITIAL_USERS,
@@ -44,8 +48,10 @@ import {
   INITIAL_KANBAN_SETTINGS,
   INITIAL_NOTIFICATION_SETTINGS,
   INITIAL_CALENDAR_SETTINGS,
+  INITIAL_GOALS,
 } from '../data/seedData';
 import { applyThemeTokensToDOM, PRESET_THEMES } from '../utils/themeTokens';
+import { calculateGoalHealth, calculateGoalProgress, isGoalProgressDerived } from '../utils/goalUtils';
 
 interface FilterState {
   assigneeId?: string | null;
@@ -107,6 +113,33 @@ interface AppContextType {
   moveTicket: (ticketId: string, targetStatus: string, newPosition?: number) => void;
   moveTickets: (ticketIds: string[], targetStatus: string) => void;
   deleteTicket: (ticketId: string) => void;
+
+  // SMART Goals
+  goals: Goal[];
+  workspaceGoals: Goal[];
+  createGoal: (data: {
+    title: string;
+    description: string;
+    purpose: string;
+    measurementType: GoalMeasurementType;
+    targetValue: number;
+    unit: string;
+    startDate: string;
+    targetDate: string;
+    timeDedicatedHoursPerWeek?: number | null;
+    projectId?: string | null;
+    milestoneTitles?: string[];
+    smartScore: number;
+  }) => Goal;
+  updateGoal: (goalId: string, updates: Partial<Goal>, logAction?: string) => void;
+  deleteGoal: (goalId: string) => void;
+  updateGoalProgress: (goalId: string, value: number) => void;
+  addGoalMilestone: (goalId: string, title: string, targetDate?: string) => void;
+  toggleGoalMilestone: (goalId: string, milestoneId: string) => void;
+  deleteGoalMilestone: (goalId: string, milestoneId: string) => void;
+  addGoalCheckIn: (goalId: string, data: { progressValue: number; notes: string; blockers?: string; nextStep?: string }) => void;
+  linkTicketToGoal: (goalId: string, ticketId: string) => void;
+  unlinkTicketFromGoal: (goalId: string, ticketId: string) => void;
 
   // Multi-select on Kanban
   selectedTicketIds: string[];
@@ -219,6 +252,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [boards, setBoards] = useState<Board[]>(INITIAL_BOARDS);
   const [tickets, setTickets] = useState<Ticket[]>(INITIAL_TICKETS);
+  const [goals, setGoals] = useState<Goal[]>(INITIAL_GOALS);
 
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>('kanban');
@@ -415,6 +449,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (data.customThemeProfiles) setCustomThemeProfiles(data.customThemeProfiles);
         if (data.notificationSettings) setNotificationSettingsState({ ...INITIAL_NOTIFICATION_SETTINGS, ...data.notificationSettings });
         if (data.calendarSettings) setCalendarSettingsState({ ...INITIAL_CALENDAR_SETTINGS, ...data.calendarSettings });
+        if (data.goals) setGoals(data.goals);
       }
     } catch (e) {
       console.warn('Could not load stored state:', e);
@@ -469,6 +504,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         customThemeProfiles,
         notificationSettings,
         calendarSettings,
+        goals,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
     } catch (e) {
@@ -492,6 +528,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     fontFamily,
     fontSize,
     kanbanCardSettings,
+    goals,
     customThemeProfiles,
     notificationSettings,
     calendarSettings,
@@ -506,6 +543,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const workspaceBoards = boards.filter((b) => workspaceProjectIds.has(b.projectId));
   const workspaceTickets = tickets.filter((t) => workspaceProjectIds.has(t.projectId));
   const workspaceNotifications = notifications.filter((n) => n.workspaceId === activeWorkspace.id);
+  const workspaceGoals = goals.filter((g) => g.workspaceId === activeWorkspace.id);
 
   const activeProject = workspaceProjects.find((p) => p.id === activeProjectId) || workspaceProjects[0] || null;
   const activeBoard = activeProject ? boards.find((b) => b.projectId === activeProject.id) || null : null;
@@ -956,6 +994,191 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSelectedTicketId((curr) => (curr === ticketId ? null : curr));
   }, []);
 
+  // ---- SMART Goals ----
+  // `health` is a stored, user-overridable field (not purely derived) so seed/authored
+  // narratives aren't silently overwritten by a live calculation — it's recomputed here
+  // at the moment something progress-relevant actually changes.
+  const recalcHealth = useCallback(
+    (goal: Goal): Goal => {
+      const progress = calculateGoalProgress(goal, tickets);
+      return { ...goal, health: calculateGoalHealth(goal, progress) };
+    },
+    [tickets]
+  );
+
+  const createGoal = useCallback(
+    (data: {
+      title: string;
+      description: string;
+      purpose: string;
+      measurementType: GoalMeasurementType;
+      targetValue: number;
+      unit: string;
+      startDate: string;
+      targetDate: string;
+      timeDedicatedHoursPerWeek?: number | null;
+      projectId?: string | null;
+      milestoneTitles?: string[];
+      smartScore: number;
+    }) => {
+      const id = `goal_${Date.now()}`;
+      const now = new Date().toISOString();
+      const newGoal: Goal = {
+        id,
+        workspaceId: activeWorkspace.id,
+        projectId: data.projectId ?? null,
+        boardId: null,
+        title: data.title,
+        description: data.description,
+        purpose: data.purpose,
+        measurementType: data.measurementType,
+        currentValue: 0,
+        targetValue: data.targetValue,
+        unit: data.unit,
+        startDate: data.startDate,
+        targetDate: data.targetDate,
+        timeDedicatedHoursPerWeek: data.timeDedicatedHoursPerWeek || undefined,
+        status: 'active',
+        health: 'on_track',
+        ownerId: currentUser.id,
+        milestones: (data.milestoneTitles || [])
+          .filter((t) => t.trim())
+          .map((title, i) => ({ id: `ms_${Date.now()}_${i}`, goalId: id, title: title.trim(), completed: false })),
+        linkedTicketIds: [],
+        checkIns: [],
+        activity: [{ id: `gact_${Date.now()}`, goalId: id, action: 'Goal created', createdAt: now }],
+        smartScore: data.smartScore,
+        createdAt: now,
+        updatedAt: now,
+      };
+      setGoals((prev) => [recalcHealth(newGoal), ...prev]);
+      return newGoal;
+    },
+    [activeWorkspace.id, currentUser.id, recalcHealth]
+  );
+
+  const updateGoal = useCallback(
+    (goalId: string, updates: Partial<Goal>, logAction?: string) => {
+      setGoals((prev) =>
+        prev.map((g) => {
+          if (g.id !== goalId) return g;
+          let updated: Goal = { ...g, ...updates, updatedAt: new Date().toISOString() };
+          if (logAction) {
+            updated.activity = [...g.activity, { id: `gact_${Date.now()}`, goalId, action: logAction, createdAt: new Date().toISOString() }];
+          }
+          return recalcHealth(updated);
+        })
+      );
+    },
+    [recalcHealth]
+  );
+
+  const deleteGoal = useCallback((goalId: string) => {
+    setGoals((prev) => prev.filter((g) => g.id !== goalId));
+  }, []);
+
+  const updateGoalProgress = useCallback(
+    (goalId: string, value: number) => {
+      const goal = goals.find((g) => g.id === goalId);
+      if (!goal) return;
+      const fromPct = calculateGoalProgress(goal, tickets);
+      updateGoal(
+        goalId,
+        { currentValue: value },
+        `Progress changed ${fromPct}% → ${calculateGoalProgress({ ...goal, currentValue: value }, tickets)}%`
+      );
+    },
+    [goals, tickets, updateGoal]
+  );
+
+  const addGoalMilestone = useCallback(
+    (goalId: string, title: string, targetDate?: string) => {
+      const goal = goals.find((g) => g.id === goalId);
+      if (!goal || !title.trim()) return;
+      const newMilestone: GoalMilestone = { id: `ms_${Date.now()}`, goalId, title: title.trim(), targetDate, completed: false };
+      updateGoal(goalId, { milestones: [...goal.milestones, newMilestone] }, `Milestone "${title.trim()}" added`);
+    },
+    [goals, updateGoal]
+  );
+
+  const toggleGoalMilestone = useCallback(
+    (goalId: string, milestoneId: string) => {
+      const goal = goals.find((g) => g.id === goalId);
+      if (!goal) return;
+      const ms = goal.milestones.find((m) => m.id === milestoneId);
+      const updatedMilestones = goal.milestones.map((m) =>
+        m.id === milestoneId ? { ...m, completed: !m.completed, completedAt: !m.completed ? new Date().toISOString() : undefined } : m
+      );
+      updateGoal(
+        goalId,
+        { milestones: updatedMilestones },
+        `Milestone "${ms?.title}" ${ms?.completed ? 'reopened' : 'completed'}`
+      );
+    },
+    [goals, updateGoal]
+  );
+
+  const deleteGoalMilestone = useCallback(
+    (goalId: string, milestoneId: string) => {
+      const goal = goals.find((g) => g.id === goalId);
+      if (!goal) return;
+      updateGoal(goalId, { milestones: goal.milestones.filter((m) => m.id !== milestoneId) });
+    },
+    [goals, updateGoal]
+  );
+
+  const addGoalCheckIn = useCallback(
+    (goalId: string, data: { progressValue: number; notes: string; blockers?: string; nextStep?: string }) => {
+      const goal = goals.find((g) => g.id === goalId);
+      if (!goal) return;
+      const newCheckIn: GoalCheckIn = {
+        id: `chk_${Date.now()}`,
+        goalId,
+        userId: currentUser.id,
+        progressValue: data.progressValue,
+        notes: data.notes,
+        blockers: data.blockers,
+        nextStep: data.nextStep,
+        createdAt: new Date().toISOString(),
+      };
+      // Only override currentValue when the goal isn't driven by milestones/linked tickets —
+      // for those, progress is derived from completion, not a manually logged number.
+      const isDerived = isGoalProgressDerived(goal);
+      updateGoal(
+        goalId,
+        {
+          checkIns: [...goal.checkIns, newCheckIn],
+          ...(isDerived ? {} : { currentValue: data.progressValue }),
+        },
+        'Check-in added'
+      );
+    },
+    [goals, currentUser.id, updateGoal]
+  );
+
+  const linkTicketToGoal = useCallback(
+    (goalId: string, ticketId: string) => {
+      const goal = goals.find((g) => g.id === goalId);
+      if (!goal || goal.linkedTicketIds.includes(ticketId)) return;
+      const ticket = tickets.find((t) => t.id === ticketId);
+      updateGoal(
+        goalId,
+        { linkedTicketIds: [...goal.linkedTicketIds, ticketId] },
+        `Linked ticket ${ticket ? ticket.title : ticketId}`
+      );
+    },
+    [goals, tickets, updateGoal]
+  );
+
+  const unlinkTicketFromGoal = useCallback(
+    (goalId: string, ticketId: string) => {
+      const goal = goals.find((g) => g.id === goalId);
+      if (!goal) return;
+      updateGoal(goalId, { linkedTicketIds: goal.linkedTicketIds.filter((id) => id !== ticketId) }, 'Unlinked ticket');
+    },
+    [goals, updateGoal]
+  );
+
   // Subtasks
   const addSubtask = useCallback(
     (ticketId: string, title: string) => {
@@ -1191,6 +1414,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveProjectId(INITIAL_PROJECTS[0].id);
     setBoards(INITIAL_BOARDS);
     setTickets(INITIAL_TICKETS);
+    setGoals(INITIAL_GOALS);
     setAllUsers(INITIAL_USERS);
     setCurrentUserState(INITIAL_USERS[0]);
     setNotifications(INITIAL_NOTIFICATIONS);
@@ -1236,6 +1460,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         moveTicket,
         moveTickets,
         deleteTicket,
+        goals,
+        workspaceGoals,
+        createGoal,
+        updateGoal,
+        deleteGoal,
+        updateGoalProgress,
+        addGoalMilestone,
+        toggleGoalMilestone,
+        deleteGoalMilestone,
+        addGoalCheckIn,
+        linkTicketToGoal,
+        unlinkTicketFromGoal,
         selectedTicketIds,
         setSelectedTicketIds,
         toggleTicketSelection,

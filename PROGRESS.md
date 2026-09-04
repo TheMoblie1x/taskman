@@ -205,15 +205,53 @@ as the canonical defaults, per the Housekeeping note above — no duplication th
 Verified: `npm run lint` + `npm run build` clean, and a live smoke test of all 4 new/changed
 tabs (screenshots) — correct data, working toggles, Sync Preferences wired to state.
 
-## Phase 5 — SMART Goals feature — ⬜ NOT STARTED
-Large, self-contained feature (nav entry, creation wizard, dashboard, goal detail, milestones,
-check-ins, ticket linking, health calculation). Treat as its own multi-session block.
+## Phase 5 — SMART Goals feature — ✅ DONE (2026-09-04)
+
+Data layer already existed (`INITIAL_GOALS`, full `Goal`/`GoalMilestone`/`GoalCheckIn`/
+`GoalActivity` types) — this phase built the calculation logic, state/CRUD, and UI on top of it.
+
+- `src/utils/goalUtils.ts` (new): `calculateGoalProgress` (derives % from milestone/linked-ticket
+  completion **only** when `measurementType === 'milestones'`; otherwise from
+  `currentValue`/`targetValue` — see bug note below), `calculateGoalHealth` (simple
+  expected-vs-actual-pace comparison against the goal's timeframe), `computeSmartChecks`/
+  `computeSmartScore`, `isGoalProgressDerived`, plus display constants/option lists.
+- `AppContext.tsx`: `goals`/`workspaceGoals` state + `createGoal`, `updateGoal`, `deleteGoal`,
+  `updateGoalProgress`, `addGoalMilestone`/`toggleGoalMilestone`/`deleteGoalMilestone`,
+  `addGoalCheckIn`, `linkTicketToGoal`/`unlinkTicketFromGoal`. `health` is a **stored,
+  user-overridable** field (matches the type and the "user can override the assessment"
+  requirement) — recomputed inside these mutations, not live on every render, so seed/authored
+  health narratives aren't silently clobbered by a recalculation nobody triggered.
+- New components: `GoalCard.tsx` (dashboard card), `GoalsView.tsx` (dashboard: stat tiles,
+  All/Active/On Track/At Risk/Behind/Completed/Overdue filters, card grid),
+  `CreateGoalModal.tsx` (6-step SMART wizard: Specific → Measurable → Relevant → Time-bound →
+  Achievable with live required-pace calc → Review with SMART score, non-blocking per spec),
+  `GoalDetailModal.tsx` (progress, health override, milestones checklist, linked-ticket
+  linking, check-in form + history, activity feed, delete/mark-complete).
+- `Sidebar.tsx`: "Goals" nav entry (badge = active goals at-risk/behind/overdue) between My
+  Tasks and Calendar, matching the requirements.txt nav example. `App.tsx`: view wiring +
+  both modals + a `5` keyboard shortcut alongside the existing `1`-`4`.
+
+**Two real bugs caught by live-testing before shipping (not left for later):**
+1. `calculateGoalProgress` originally used milestone-completion-ratio whenever a goal *had*
+   milestones, regardless of its actual `measurementType` — so "Ship Android v2.0" (a
+   percentage goal at 78%, with 1 of 4 supplementary milestones checked) displayed 25%.
+   Fixed to only derive from milestones/tickets when that's the goal's actual measurement type.
+2. `CreateGoalModal` called `useMemo` after an early `if (!isOpen) return null`, a Rules-of-Hooks
+   violation — invisible until the modal was closed and reopened (hook count changed between
+   renders), at which point it crashed the whole app to a blank page with no error boundary.
+   Replaced with a plain computed value (it wasn't expensive enough to need memoizing anyway).
+
+Verified: `npm run lint` + `npm run build` clean; full live walkthrough (dashboard → open a
+seeded goal → toggle a milestone → health auto-updates → full 6-step creation wizard → new
+goal appears and opens → deleted the test goal). No console errors.
 
 ## Phase 6 — Firestore persistence & sync layer — ⬜ BLOCKED
-Needs from user: the actual Firestore database/project path (requirements.txt leaves this as
-a placeholder). Also a large architectural addition (repository layer, offline queue, security
-rules) — do this last, after the UI-facing phases are settled, since the data shape will keep
-shifting until Goals/Settings are done.
+
+Asked the user for a Firestore project; they're creating a new Firebase project and will come
+back with the ID (and database ID, if using a named database — default is usually fine).
+Still blocked until that arrives. Also a large architectural addition (repository layer,
+offline queue, security rules) — do this last, now that the UI-facing phases are settled and
+the data shape (Goals included) has stabilized.
 
 ---
 ### How to resume

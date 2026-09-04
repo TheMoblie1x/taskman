@@ -27,6 +27,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     activeView,
     setActiveView,
     workspaceTickets,
+    workspaceGoals,
     currentUser,
     workspaceNotifications,
     calendarConnections,
@@ -38,6 +39,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Tickets assigned to current user, scoped to the active workspace
   const myTasksCount = workspaceTickets.filter(
     (t) => t.assigneeId === currentUser.id && t.status !== 'DONE'
+  ).length;
+
+  const goalsNeedingAttentionCount = workspaceGoals.filter(
+    (g) => g.status === 'active' && (g.health === 'at_risk' || g.health === 'behind' || g.health === 'overdue')
   ).length;
 
   const googleCal = calendarConnections.find((c) => c.provider === 'google');
@@ -97,6 +102,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {myTasksCount > 0 && (
                   <span className="px-1.5 py-0.2 text-[9px] rounded-full font-bold bg-blue-100 text-blue-700">
                     {myTasksCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                id="sidebar-goals-btn"
+                onClick={() => {
+                  setActiveView('goals');
+                  if (window.innerWidth < 768) onToggle();
+                }}
+                className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-xs font-semibold transition-colors ${
+                  activeView === 'goals'
+                    ? 'bg-blue-50 text-blue-700'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <GoogleIcon name="flag" size={14} className={`${activeView === 'goals' ? 'text-blue-600' : 'text-slate-400'}`} />
+                  <span>Goals</span>
+                </div>
+                {goalsNeedingAttentionCount > 0 && (
+                  <span className="px-1.5 py-0.2 text-[9px] rounded-full font-bold bg-amber-100 text-amber-700">
+                    {goalsNeedingAttentionCount}
                   </span>
                 )}
               </button>

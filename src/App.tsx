@@ -12,6 +12,9 @@ import { CreateProjectModal } from './components/CreateProjectModal';
 import { ShareModal } from './components/ShareModal';
 import { SettingsModal } from './components/SettingsModal';
 import { ShortcutsModal } from './components/ShortcutsModal';
+import { GoalsView } from './components/GoalsView';
+import { CreateGoalModal } from './components/CreateGoalModal';
+import { GoalDetailModal } from './components/GoalDetailModal';
 
 const AppContent: React.FC = () => {
   const { activeView, setActiveView, selectedTicketId } = useApp();
@@ -23,6 +26,8 @@ const AppContent: React.FC = () => {
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [createGoalOpen, setCreateGoalOpen] = useState(false);
+  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
 
   // Global Keyboard shortcuts
   useEffect(() => {
@@ -51,6 +56,8 @@ const AppContent: React.FC = () => {
           setActiveView('calendar');
         } else if (e.key === '4') {
           setActiveView('my-tasks');
+        } else if (e.key === '5') {
+          setActiveView('goals');
         }
       }
     };
@@ -106,11 +113,29 @@ const AppContent: React.FC = () => {
           )}
 
           {activeView === 'my-tasks' && <MyTasksView />}
+
+          {activeView === 'goals' && (
+            <GoalsView
+              onOpenCreateGoal={() => setCreateGoalOpen(true)}
+              onOpenGoal={(goalId) => setSelectedGoalId(goalId)}
+            />
+          )}
         </main>
       </div>
 
       {/* Ticket Details Drawer */}
       {selectedTicketId && <TicketDrawer />}
+
+      <CreateGoalModal
+        isOpen={createGoalOpen}
+        onClose={() => setCreateGoalOpen(false)}
+        onCreated={(goalId) => {
+          setCreateGoalOpen(false);
+          setSelectedGoalId(goalId);
+        }}
+      />
+
+      {selectedGoalId && <GoalDetailModal goalId={selectedGoalId} onClose={() => setSelectedGoalId(null)} />}
 
       {/* Modals */}
       <CreateTicketModal
