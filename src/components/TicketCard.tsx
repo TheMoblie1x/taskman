@@ -3,6 +3,9 @@ import { motion } from 'motion/react';
 import { Ticket, Project, User, DensityMode } from '../types';
 import { TicketTypeBadge, PriorityBadge } from './TicketBadge';
 import { GoogleIcon } from './GoogleIcon';
+import { useApp } from '../context/AppContext';
+
+const CARD_RADIUS_PX: Record<'sm' | 'md' | 'lg', string> = { sm: '4px', md: '8px', lg: '14px' };
 
 interface TicketCardProps {
   ticket: Ticket;
@@ -31,6 +34,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
   density = 'compact',
   selectedTicketIds = [],
 }) => {
+  const { kanbanCardSettings: cfg } = useApp();
   const ticketKey = project ? `${project.key}-${ticket.ticketNumber}` : `TKT-${ticket.ticketNumber}`;
 
   // Check if due date is overdue or today
@@ -94,6 +98,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
       // the native DragEvent handler needs a local cast past that prop-type collision.
       onDragStart={handleDragStart as any}
       onClick={handleCardClick}
+      style={{ borderRadius: CARD_RADIUS_PX[cfg.cardRadius] }}
       className={`group card density-card cursor-grab active:cursor-grabbing select-none relative dark:bg-slate-850 dark:border-slate-700/80 ${
         isComfortable ? 'p-3.5 space-y-2' : 'p-2.5'
       } ${
@@ -121,12 +126,14 @@ export const TicketCard: React.FC<TicketCardProps> = ({
             {isSelected && <GoogleIcon name="check" size={10} weight={700} />}
           </button>
 
-          <TicketTypeBadge type={ticket.type} showLabel={false} />
-          <span className="font-mono text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-tight group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-            {ticketKey}
-          </span>
+          {cfg.showTicketType && <TicketTypeBadge type={ticket.type} showLabel={false} />}
+          {cfg.showTicketId && (
+            <span className="font-mono text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-tight group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+              {ticketKey}
+            </span>
+          )}
         </div>
-        <PriorityBadge priority={ticket.priority} showLabel={false} />
+        {cfg.showPriority && <PriorityBadge priority={ticket.priority} showLabel={false} />}
       </div>
 
       {/* Title */}
@@ -139,7 +146,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
       </h4>
 
       {/* Labels */}
-      {ticket.labels && ticket.labels.length > 0 && (
+      {cfg.showLabels && ticket.labels && ticket.labels.length > 0 && (
         <div className={`flex flex-wrap gap-1 ${isComfortable ? 'mb-2.5' : 'mb-2'}`}>
           {ticket.labels.slice(0, 3).map((lbl) => (
             <span
@@ -161,7 +168,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
       }`}>
         <div className="flex items-center gap-2">
           {/* Due date */}
-          {ticket.dueAt && (
+          {cfg.showDueDate && ticket.dueAt && (
             <span
               className={`flex items-center gap-1 font-medium ${
                 isOverdue
@@ -183,7 +190,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
           )}
 
           {/* Subtasks */}
-          {totalSubtasks > 0 && (
+          {cfg.showSubtasksCount && totalSubtasks > 0 && (
             <span
               className={`flex items-center gap-0.5 ${
                 completedSubtasks === totalSubtasks ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'
@@ -216,23 +223,25 @@ export const TicketCard: React.FC<TicketCardProps> = ({
         </div>
 
         {/* Assignee Avatar */}
-        <div className="flex items-center gap-1 shrink-0">
-          {assignee ? (
-            <img
-              src={assignee.avatarUrl}
-              alt={assignee.name}
-              title={`Assigned to ${assignee.name}`}
-              className="w-4.5 h-4.5 rounded-full object-cover border border-slate-200 dark:border-slate-700"
-            />
-          ) : (
-            <span
-              className="w-4.5 h-4.5 rounded-full border border-dashed border-slate-300 dark:border-slate-700 flex items-center justify-center text-[9px] text-slate-400 dark:text-slate-500"
-              title="Unassigned"
-            >
-              ?
-            </span>
-          )}
-        </div>
+        {cfg.showAssignee && (
+          <div className="flex items-center gap-1 shrink-0">
+            {assignee ? (
+              <img
+                src={assignee.avatarUrl}
+                alt={assignee.name}
+                title={`Assigned to ${assignee.name}`}
+                className="w-4.5 h-4.5 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+              />
+            ) : (
+              <span
+                className="w-4.5 h-4.5 rounded-full border border-dashed border-slate-300 dark:border-slate-700 flex items-center justify-center text-[9px] text-slate-400 dark:text-slate-500"
+                title="Unassigned"
+              >
+                ?
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </motion.div>
   );

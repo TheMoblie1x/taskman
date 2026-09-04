@@ -6,6 +6,8 @@
   --bg: #F8FAFC;
   --sidebar: #FFFFFF;
   --header: #FFFFFF;
+  --card: #FFFFFF;
+  --kanban-column: #F1F5F9;
   --border: #E2E8F0;
   --border-subtle: #F1F5F9;
   --text-main: #0F172A;
@@ -23,12 +25,22 @@
   --bg: #0B0F19;
   --sidebar: #0F172A;
   --header: #0F172A;
+  --card: #1E293B;
+  --kanban-column: #111827;
   --border: #1E293B;
   --border-subtle: #1E293B;
   --text-main: #F1F5F9;
   --text-muted: #94A3B8;
   --accent: #3B82F6;
   --accent-hover: #60A5FA;
+}
+
+/* Applied by the Settings > Appearance "High Contrast" theme mode */
+[data-high-contrast="true"] {
+  --border: #000000;
+}
+[data-high-contrast="true"].dark {
+  --border: #FFFFFF;
 }
 
 @layer base {
@@ -50,18 +62,13 @@
 
 /* High Density Component Layout Classes */
 .kanban-column {
-  background-color: #f1f5f9;
+  background-color: var(--kanban-column);
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
 }
 
-.dark .kanban-column {
-  background-color: #111827;
-  border-color: #1f2937;
-}
-
 .card {
-  background-color: #ffffff;
+  background-color: var(--card);
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.15s ease;
@@ -73,8 +80,6 @@
 }
 
 .dark .card {
-  background-color: #1e293b;
-  border-color: #334155;
   color: #f8fafc;
 }
 
@@ -86,11 +91,6 @@
 .sidebar {
   background-color: var(--sidebar);
   border-right: 1px solid var(--border);
-}
-
-.dark .sidebar {
-  background-color: #0f172a;
-  border-right-color: #1e293b;
 }
 
 /* High Density Form Inputs & Buttons */
@@ -144,6 +144,17 @@ input, select, textarea {
 [data-density="comfortable"] textarea {
   font-size: 0.8125rem; /* 13px */
   line-height: 1.25rem;
+}
+
+[data-density="spacious"] .density-card {
+  padding: 1.25rem 1.375rem;
+}
+
+[data-density="spacious"] input,
+[data-density="spacious"] select,
+[data-density="spacious"] textarea {
+  font-size: 0.875rem; /* 14px */
+  line-height: 1.5rem;
 }
 
 

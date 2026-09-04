@@ -29,6 +29,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     toggleTicketSelection,
     clearTicketSelection,
     density,
+    kanbanCardSettings,
     allUsers,
     setSelectedTicketId,
     filters,
@@ -142,7 +143,19 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   };
 
   const activeFiltersCount = Object.values(filters).filter(Boolean).length + (searchQuery ? 1 : 0);
-  const isComfortable = density === 'comfortable';
+  const isComfortable = density === 'comfortable' || density === 'spacious';
+
+  // Column width: base size follows density, further widened/narrowed by the
+  // Settings > Appearance > Kanban Card "Column Width" preference.
+  const columnWidthClass = (() => {
+    const widths: Record<string, [string, string]> = {
+      narrow: ['w-56', 'w-60'],
+      normal: isComfortable ? ['w-76', 'w-80'] : ['w-68', 'w-72'],
+      wide: isComfortable ? ['w-88', 'w-96'] : ['w-80', 'w-88'],
+    };
+    const [base, sm] = widths[kanbanCardSettings.columnWidth] || widths.normal;
+    return `${base} sm:${sm}`;
+  })();
 
   return (
     <div className="flex-1 flex flex-col h-[calc(100vh-2.75rem)] overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors">
@@ -255,7 +268,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               onDragOver={(e) => handleDragOver(e, col.status)}
               onDragLeave={handleDragLeave}
               onDrop={(e) => handleDrop(e, col.status)}
-              className={`kanban-column ${isComfortable ? 'w-76 sm:w-80' : 'w-68 sm:w-72'} shrink-0 rounded-md border flex flex-col max-h-full transition-all dark:bg-slate-900/90 ${
+              className={`kanban-column ${columnWidthClass} shrink-0 rounded-md border flex flex-col max-h-full transition-all dark:bg-slate-900/90 ${
                 isDropTarget
                   ? 'border-blue-400 ring-2 ring-blue-100 dark:ring-blue-900/50 bg-blue-50/40 dark:bg-blue-950/30'
                   : isOverWip
@@ -491,7 +504,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         })}
 
         {/* Add Column Button */}
-        <div className={`${isComfortable ? 'w-76 sm:w-80' : 'w-68 sm:w-72'} shrink-0`}>
+        <div className={`${columnWidthClass} shrink-0`}>
           {!isAddingColumn ? (
             <button
               onClick={() => setIsAddingColumn(true)}

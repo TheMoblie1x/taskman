@@ -1,4 +1,31 @@
-import { CustomColors, PresetThemeName, ThemeMode, SupportedFontFamily, SupportedFontSize } from '../types';
+import { CustomColors, KanbanCardSettings, PresetThemeName, ThemeMode, SupportedFontFamily, SupportedFontSize } from '../types';
+
+export const DEFAULT_KANBAN_CARD_SETTINGS: KanbanCardSettings = {
+  showTicketId: true,
+  showAssignee: true,
+  showPriority: true,
+  showLabels: true,
+  showDueDate: true,
+  showTicketType: true,
+  showSubtasksCount: true,
+  cardRadius: 'md',
+  columnWidth: 'normal',
+};
+
+export const SUPPORTED_FONT_FAMILIES: SupportedFontFamily[] = [
+  'Plus Jakarta Sans',
+  'Inter',
+  'Roboto',
+  'Outfit',
+  'JetBrains Mono',
+];
+
+export const SUPPORTED_FONT_SIZES: { value: SupportedFontSize; label: string }[] = [
+  { value: 'small', label: 'Small' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'large', label: 'Large' },
+  { value: 'xlarge', label: 'Extra Large' },
+];
 
 export const PRESET_THEMES: Record<PresetThemeName, { name: string; mode: 'light' | 'dark'; colors: CustomColors }> = {
   default: {
@@ -155,17 +182,18 @@ export function applyThemeTokensToDOM(
     ...(customColors || {}),
   };
 
-  root.style.setProperty('--color-primary', mergedColors.primary);
+  // These are the actual custom properties index.css and the app's utility classes read —
+  // keep this the single place that maps the CustomColors token set onto them.
+  root.style.setProperty('--accent', mergedColors.primary);
+  root.style.setProperty('--accent-hover', mergedColors.accent);
+  root.style.setProperty('--bg', mergedColors.background);
+  root.style.setProperty('--sidebar', mergedColors.sidebar);
+  root.style.setProperty('--card', mergedColors.card);
+  root.style.setProperty('--header', mergedColors.header);
+  root.style.setProperty('--text-main', mergedColors.text);
+  root.style.setProperty('--text-muted', mergedColors.textSecondary);
+  root.style.setProperty('--border', mergedColors.border);
   root.style.setProperty('--color-secondary', mergedColors.secondary);
-  root.style.setProperty('--color-accent', mergedColors.accent);
-  root.style.setProperty('--color-background', mergedColors.background);
-  root.style.setProperty('--color-surface', mergedColors.sidebar);
-  root.style.setProperty('--color-sidebar', mergedColors.sidebar);
-  root.style.setProperty('--color-card', mergedColors.card);
-  root.style.setProperty('--color-header', mergedColors.header);
-  root.style.setProperty('--color-text', mergedColors.text);
-  root.style.setProperty('--color-text-secondary', mergedColors.textSecondary);
-  root.style.setProperty('--color-border', mergedColors.border);
 
   // Font family
   const fontFallback = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";

@@ -23,6 +23,12 @@ import {
   CalendarEventMapping,
   DensityMode,
   ThemeMode,
+  PresetThemeName,
+  CustomColors,
+  SupportedFontFamily,
+  SupportedFontSize,
+  KanbanCardSettings,
+  CustomThemeProfile,
 } from '../types';
 import {
   INITIAL_USERS,
@@ -34,6 +40,7 @@ import {
   INITIAL_CALENDAR_CONNECTIONS,
   INITIAL_SHARE_LINKS,
 } from '../data/seedData';
+import { applyThemeTokensToDOM, DEFAULT_KANBAN_CARD_SETTINGS, PRESET_THEMES } from '../utils/themeTokens';
 
 interface FilterState {
   assigneeId?: string | null;
@@ -106,10 +113,28 @@ interface AppContextType {
   density: DensityMode;
   setDensity: (mode: DensityMode) => void;
 
-  // Dark Mode
+  // Theme mode (light/dark/system/high_contrast)
   theme: ThemeMode;
   setTheme: (mode: ThemeMode) => void;
   toggleTheme: () => void;
+
+  // Appearance: preset theme, custom colors, typography, Kanban card display
+  presetTheme: PresetThemeName;
+  setPresetTheme: (preset: PresetThemeName) => void;
+  customColors: Partial<CustomColors>;
+  setCustomColors: (colors: Partial<CustomColors>) => void;
+  fontFamily: SupportedFontFamily;
+  setFontFamily: (font: SupportedFontFamily) => void;
+  fontSize: SupportedFontSize;
+  setFontSize: (size: SupportedFontSize) => void;
+  kanbanCardSettings: KanbanCardSettings;
+  setKanbanCardSettings: (settings: Partial<KanbanCardSettings>) => void;
+  customThemeProfiles: CustomThemeProfile[];
+  saveCustomTheme: (name: string) => void;
+  applyCustomTheme: (id: string) => void;
+  renameCustomTheme: (id: string, name: string) => void;
+  deleteCustomTheme: (id: string) => void;
+  resetAppearance: () => void;
 
   // Ticket Detail Drawer
   selectedTicketId: string | null;
@@ -206,43 +231,111 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     document.documentElement.setAttribute('data-density', mode);
   }, []);
 
-  // Dark Mode
+  // Appearance: theme mode, preset theme, custom color overrides, typography, Kanban card
+  // display, and saved custom theme profiles. applyThemeTokensToDOM (below) is the single
+  // place that turns this state into the CSS custom properties the app actually renders with.
   const [theme, setThemeState] = useState<ThemeMode>('light');
+  const [presetTheme, setPresetThemeState] = useState<PresetThemeName>('default');
+  const [customColors, setCustomColorsState] = useState<Partial<CustomColors>>({});
+  const [fontFamily, setFontFamilyState] = useState<SupportedFontFamily>('Plus Jakarta Sans');
+  const [fontSize, setFontSizeState] = useState<SupportedFontSize>('medium');
+  const [kanbanCardSettings, setKanbanCardSettingsState] = useState<KanbanCardSettings>(DEFAULT_KANBAN_CARD_SETTINGS);
+  const [customThemeProfiles, setCustomThemeProfiles] = useState<CustomThemeProfile[]>([]);
 
-  const applyTheme = useCallback((mode: ThemeMode) => {
+  const setTheme = useCallback((mode: ThemeMode) => {
     setThemeState(mode);
     try {
       localStorage.setItem('kanban_app_theme', mode);
     } catch (e) {
       // ignore
     }
-    if (mode === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
   }, []);
-
-  const setTheme = useCallback((mode: ThemeMode) => {
-    applyTheme(mode);
-  }, [applyTheme]);
 
   const toggleTheme = useCallback(() => {
     setThemeState((prev) => {
-      const next = prev === 'dark' ? 'light' : 'dark';
+      const isCurrentlyDark =
+        prev === 'dark' ||
+        (prev === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      const next: ThemeMode = isCurrentlyDark ? 'light' : 'dark';
       try {
         localStorage.setItem('kanban_app_theme', next);
       } catch (e) {
         // ignore
       }
-      if (next === 'dark') {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
       return next;
     });
   }, []);
+
+  const setPresetTheme = useCallback((preset: PresetThemeName) => {
+    setPresetThemeState(preset);
+  }, []);
+
+  const setCustomColors = useCallback((colors: Partial<CustomColors>) => {
+    setCustomColorsState((prev) => ({ ...prev, ...colors }));
+  }, []);
+
+  const setFontFamily = useCallback((font: SupportedFontFamily) => {
+    setFontFamilyState(font);
+  }, []);
+
+  const setFontSize = useCallback((size: SupportedFontSize) => {
+    setFontSizeState(size);
+  }, []);
+
+  const setKanbanCardSettings = useCallback((settings: Partial<KanbanCardSettings>) => {
+    setKanbanCardSettingsState((prev) => ({ ...prev, ...settings }));
+  }, []);
+
+  const saveCustomTheme = useCallback(
+    (name: string) => {
+      const baseColors = PRESET_THEMES[presetTheme]?.colors || PRESET_THEMES.default.colors;
+      const newProfile: CustomThemeProfile = {
+        id: `theme_${Date.now()}`,
+        name,
+        mode: theme,
+        preset: presetTheme,
+        colors: { ...baseColors, ...customColors },
+        createdAt: new Date().toISOString(),
+      };
+      setCustomThemeProfiles((prev) => [...prev, newProfile]);
+    },
+    [theme, presetTheme, customColors]
+  );
+
+  const applyCustomTheme = useCallback(
+    (id: string) => {
+      const profile = customThemeProfiles.find((p) => p.id === id);
+      if (!profile) return;
+      setTheme(profile.mode);
+      setPresetThemeState(profile.preset);
+      setCustomColorsState(profile.colors);
+    },
+    [customThemeProfiles, setTheme]
+  );
+
+  const renameCustomTheme = useCallback((id: string, name: string) => {
+    setCustomThemeProfiles((prev) => prev.map((p) => (p.id === id ? { ...p, name } : p)));
+  }, []);
+
+  const deleteCustomTheme = useCallback((id: string) => {
+    setCustomThemeProfiles((prev) => prev.filter((p) => p.id !== id));
+  }, []);
+
+  const resetAppearance = useCallback(() => {
+    setTheme('light');
+    setPresetThemeState('default');
+    setCustomColorsState({});
+    setFontFamilyState('Plus Jakarta Sans');
+    setFontSizeState('medium');
+    setKanbanCardSettingsState(DEFAULT_KANBAN_CARD_SETTINGS);
+    setDensity('compact');
+  }, [setTheme, setDensity]);
+
+  // Apply the current appearance state to the DOM (CSS custom properties, dark class,
+  // font family/size) whenever any part of it changes.
+  useEffect(() => {
+    applyThemeTokensToDOM(theme, presetTheme, customColors, fontFamily, fontSize);
+  }, [theme, presetTheme, customColors, fontFamily, fontSize]);
 
   // Multi-select state
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
@@ -290,41 +383,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (data.shareLinks) setShareLinks(data.shareLinks);
         if (data.calendarConnections) setCalendarConnections(data.calendarConnections);
         if (data.notifications) setNotifications(data.notifications);
+        if (data.presetTheme) setPresetThemeState(data.presetTheme);
+        if (data.customColors) setCustomColorsState(data.customColors);
+        if (data.fontFamily) setFontFamilyState(data.fontFamily);
+        if (data.fontSize) setFontSizeState(data.fontSize);
+        if (data.kanbanCardSettings) setKanbanCardSettingsState({ ...DEFAULT_KANBAN_CARD_SETTINGS, ...data.kanbanCardSettings });
+        if (data.customThemeProfiles) setCustomThemeProfiles(data.customThemeProfiles);
       }
     } catch (e) {
       console.warn('Could not load stored state:', e);
     } finally {
-      // Check saved density
+      // Density and theme mode each also get a small dedicated key so they're available
+      // synchronously on next boot without waiting on the rest of app state to parse.
       try {
         const savedDensity = localStorage.getItem('kanban_app_density') as DensityMode | null;
-        if (savedDensity === 'compact' || savedDensity === 'comfortable') {
+        if (savedDensity === 'compact' || savedDensity === 'comfortable' || savedDensity === 'spacious') {
           setDensityState(savedDensity);
-          document.documentElement.setAttribute('data-density', savedDensity);
-        } else {
-          document.documentElement.setAttribute('data-density', 'compact');
         }
+        document.documentElement.setAttribute('data-density', savedDensity || 'compact');
       } catch (err) {
         document.documentElement.setAttribute('data-density', 'compact');
       }
 
-      // Check saved theme / dark mode
       try {
         const savedTheme = localStorage.getItem('kanban_app_theme') as ThemeMode | null;
-        if (savedTheme === 'dark' || savedTheme === 'light') {
+        if (savedTheme === 'dark' || savedTheme === 'light' || savedTheme === 'system' || savedTheme === 'high_contrast') {
           setThemeState(savedTheme);
-          if (savedTheme === 'dark') {
-            document.documentElement.classList.add('dark');
-          } else {
-            document.documentElement.classList.remove('dark');
-          }
         } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
           setThemeState('dark');
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
         }
       } catch (err) {
-        document.documentElement.classList.remove('dark');
+        // ignore — theme falls back to the 'light' default
       }
       setInitialized(true);
     }
@@ -346,6 +435,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         shareLinks,
         calendarConnections,
         notifications,
+        presetTheme,
+        customColors,
+        fontFamily,
+        fontSize,
+        kanbanCardSettings,
+        customThemeProfiles,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
     } catch (e) {
@@ -364,6 +459,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     shareLinks,
     calendarConnections,
     notifications,
+    presetTheme,
+    customColors,
+    fontFamily,
+    fontSize,
+    kanbanCardSettings,
+    customThemeProfiles,
   ]);
 
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) || workspaces[0];
@@ -1061,7 +1162,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCalendarConnections(INITIAL_CALENDAR_CONNECTIONS);
     setShareLinks(INITIAL_SHARE_LINKS);
     setIsGuestViewer(false);
-  }, []);
+    resetAppearance();
+    setCustomThemeProfiles([]);
+  }, [resetAppearance]);
 
   return (
     <AppContext.Provider
@@ -1105,6 +1208,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         theme,
         setTheme,
         toggleTheme,
+        presetTheme,
+        setPresetTheme,
+        customColors,
+        setCustomColors,
+        fontFamily,
+        setFontFamily,
+        fontSize,
+        setFontSize,
+        kanbanCardSettings,
+        setKanbanCardSettings,
+        customThemeProfiles,
+        saveCustomTheme,
+        applyCustomTheme,
+        renameCustomTheme,
+        deleteCustomTheme,
+        resetAppearance,
         selectedTicketId,
         selectedTicket,
         setSelectedTicketId,

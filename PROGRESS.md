@@ -104,10 +104,47 @@ pre-existing, previously-invisible runtime bugs — all fixed:
 
 Verified: `npm run lint` and `npm run build` both pass clean — and now actually mean something.
 
-## Phase 3 — Settings page: Appearance/Theme/Colors/Typography/Kanban prefs — ⬜ NOT STARTED
+## Phase 3 — Settings page: Appearance/Theme/Colors/Typography/Kanban prefs — ✅ DONE (2026-09-04)
 
-`SettingsModal.tsx` and `src/utils/themeTokens.ts` already exist — need to read them before
-scoping this phase (unknown how much is already built vs stubbed).
+Found the data layer mostly already designed but entirely unwired: `types.ts` already had
+`CustomColors`/`PresetThemeName`/`CustomThemeProfile`/`KanbanCardSettings`/`WorkspaceAppearanceSettings`,
+and `src/utils/themeTokens.ts` had `applyThemeTokensToDOM` + 6 preset themes fully built —
+but nothing called it, and its output CSS variable names (`--color-primary` etc.) didn't match
+what `index.css`/the components actually render with (`--bg`, `--sidebar`, `--accent`, ...).
+
+Built the working system:
+- `themeTokens.ts`: retargeted `applyThemeTokensToDOM` to set the *real* consumed CSS vars;
+  added `DEFAULT_KANBAN_CARD_SETTINGS`, `SUPPORTED_FONT_FAMILIES`, `SUPPORTED_FONT_SIZES`.
+- `index.css`: added `--card`/`--kanban-column` vars (were hardcoded hex before) so card/column
+  backgrounds are actually themeable; added a `[data-high-contrast]` border rule; added the
+  `spacious` density tier (type already allowed it, no CSS existed); removed two hardcoded
+  `.dark` overrides that were silently defeating custom sidebar/card colors in dark mode.
+- `AppContext.tsx`: added `presetTheme`, `customColors`, `fontFamily`, `fontSize`,
+  `kanbanCardSettings`, `customThemeProfiles` state + actions (`setPresetTheme`,
+  `setCustomColors` merge, `setFontFamily`, `setFontSize`, `setKanbanCardSettings` merge,
+  `saveCustomTheme`/`applyCustomTheme`/`renameCustomTheme`/`deleteCustomTheme`,
+  `resetAppearance`); persisted via the existing localStorage blob; a single `useEffect`
+  calls `applyThemeTokensToDOM` on any change. `theme`/`setTheme`/`toggleTheme` (already typed
+  for all 4 `ThemeMode`s, but only ever implemented light/dark) now genuinely support
+  system/high-contrast too.
+- `SettingsModal.tsx`: rebuilt the old 2-option "Density & Display" tab into a full
+  "Appearance" tab — theme mode picker, 6-swatch preset gallery, 6-field custom color grid
+  (native color inputs), font family/size + 3-way density, 7 Kanban-card visibility
+  checkboxes + card radius/column width selects, save/apply/delete custom theme profiles,
+  reset-to-default.
+- `TicketCard.tsx` / `KanbanBoard.tsx`: wired `kanbanCardSettings` so the toggles actually
+  affect the board — each card field (ticket id/type/priority/labels/due date/subtasks/
+  assignee) is conditionally rendered, card radius is applied via inline style (has to beat
+  the `.card` class), and column width now derives from both density and the new setting.
+
+Verified with a live smoke test (`npm run dev` + browser): switched to the Forest preset —
+sidebar/cards/columns re-themed live; unchecked "Assignee" — avatars disappeared from every
+card; typed in the (previously dead) top search bar — board filtered live. No console errors.
+
+**Explicitly deferred** (kept out to keep this phase shippable): per-workspace appearance
+override (`WorkspaceAppearanceSettings` type exists, item 10 in requirements.txt says "where
+appropriate" — global-only for now). Account/Calendar/Notification/Licensed-To settings
+sections are Phase 4, not this one.
 
 ## Phase 4 — Account / Calendar / Notification settings + "Licensed To" — ⬜ NOT STARTED
 Includes the deferred notification workspace-scoping gap from Phase 1.
