@@ -1,0 +1,11 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # These VITE_FIREBASE_* values are the Firebase Web SDK config — meant to ship in the
+  # client bundle (Vite inlines every VITE_* var into it by design; that's how the app reads
+  # them at runtime). Firebase's security boundary is Firestore Security Rules, not hiding
+  # this config, so Netlify's secrets scanner flagging them in the build output is a false
+  # positive for this app — omit them from that scan rather than disabling it entirely.
+  SECRETS_SCAN_OMIT_KEYS = "VITE_FIREBASE_API_KEY,VITE_FIREBASE_AUTH_DOMAIN,VITE_FIREBASE_PROJECT_ID,VITE_FIREBASE_STORAGE_BUCKET,VITE_FIREBASE_MESSAGING_SENDER_ID,VITE_FIREBASE_APP_ID,VITE_FIREBASE_MEASUREMENT_ID"
