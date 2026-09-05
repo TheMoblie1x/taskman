@@ -10,6 +10,14 @@
   # positive for this app — omit them from that scan rather than disabling it entirely.
   SECRETS_SCAN_OMIT_KEYS = "VITE_FIREBASE_API_KEY,VITE_FIREBASE_AUTH_DOMAIN,VITE_FIREBASE_PROJECT_ID,VITE_FIREBASE_STORAGE_BUCKET,VITE_FIREBASE_MESSAGING_SENDER_ID,VITE_FIREBASE_APP_ID,VITE_FIREBASE_MEASUREMENT_ID"
 
+# Client-side routes (e.g. /share/:token) have no matching static file, so they need to land
+# on index.html and let the app's own router take over — this must come before the generic
+# /Collab/* rewrite below, since Netlify applies only the first matching rule per request.
+[[redirects]]
+  from = "/Collab/share/*"
+  to = "/index.html"
+  status = 200
+
 # The build is compiled with base path /Collab/ (see vite.config.ts) so it can be proxied
 # under mobile1x.com/Collab. This site's own assets physically live at the root of `dist`,
 # so rewrite /Collab/* back to root here — keeps this Netlify URL itself working directly,
@@ -17,4 +25,10 @@
 [[redirects]]
   from = "/Collab/*"
   to = "/:splat"
+  status = 200
+
+# Same client-side route, reachable directly on this Netlify domain without the /Collab prefix.
+[[redirects]]
+  from = "/share/*"
+  to = "/index.html"
   status = 200

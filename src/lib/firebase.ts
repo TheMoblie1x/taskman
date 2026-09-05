@@ -8,6 +8,7 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  signInAnonymously,
   signOut,
   onAuthStateChanged,
   type User as FirebaseUser,
@@ -55,6 +56,22 @@ export function signInWithGoogle(): Promise<FirebaseUser | null> {
     .then((cred) => cred.user)
     .catch((err) => {
       console.error('Google sign-in failed:', err);
+      throw err;
+    });
+}
+
+/**
+ * Anonymous sign-in for a share-link visitor only — not a general auth path. The resulting
+ * uid has no email, so it never satisfies firestore.rules' signedIn()/isWorkspaceMember(); it
+ * only gains access by then registering a guestSessions/{uid} doc the rules verify against a
+ * real, active shareLinks token (see ShareGuestApp.tsx and firestore.rules).
+ */
+export function signInGuest(): Promise<FirebaseUser | null> {
+  if (!auth) return Promise.resolve(null);
+  return signInAnonymously(auth)
+    .then((cred) => cred.user)
+    .catch((err) => {
+      console.error('Guest sign-in failed:', err);
       throw err;
     });
 }

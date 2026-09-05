@@ -23,6 +23,7 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  getDoc,
   getDocs,
   writeBatch,
   type Unsubscribe,
@@ -40,6 +41,7 @@ import {
   Goal,
   AppNotification,
   ShareLink,
+  SharePermission,
   CalendarConnection,
   DocPage,
 } from '../types';
@@ -191,6 +193,11 @@ export const saveBoard = (board: Board) => setDoc(doc(requireDb(), 'boards', boa
 export const updateBoard = (boardId: string, updates: Partial<Board>) =>
   updateDoc(doc(requireDb(), 'boards', boardId), updates);
 
+export async function getBoardById(boardId: string): Promise<Board | null> {
+  const snap = await getDoc(doc(requireDb(), 'boards', boardId));
+  return snap.exists() ? ({ id: snap.id, ...(snap.data() as DocumentData) } as Board) : null;
+}
+
 // ---- Tickets ----
 export const subscribeWorkspaceTickets = (
   workspaceId: string,
@@ -202,6 +209,13 @@ export const saveTicket = (ticket: Ticket) => setDoc(doc(requireDb(), 'tickets',
 export const updateTicketDoc = (ticketId: string, updates: Partial<Ticket>) =>
   updateDoc(doc(requireDb(), 'tickets', ticketId), updates as DocumentData);
 export const deleteTicketDoc = (ticketId: string) => deleteDoc(doc(requireDb(), 'tickets', ticketId));
+
+// A share-link guest only ever needs one board's tickets, not a whole workspace's.
+export const subscribeBoardTickets = (
+  boardId: string,
+  onData: (rows: Ticket[]) => void,
+  onError?: (e: unknown) => void
+) => subscribeCollection<Ticket>('tickets', [where('boardId', '==', boardId)], onData, onError);
 
 // ---- Goals ----
 export const subscribeWorkspaceGoals = (
@@ -246,6 +260,47 @@ export const subscribeAllShareLinks = (onData: (rows: ShareLink[]) => void, onEr
 export const saveShareLink = (link: ShareLink) => setDoc(doc(requireDb(), 'shareLinks', link.id), link);
 export const updateShareLinkDoc = (id: string, updates: Partial<ShareLink>) =>
   updateDoc(doc(requireDb(), 'shareLinks', id), updates as DocumentData);
+
+// Looked up by a guest visitor's own token — the doc ID equals the token (see createShareLink)
+// so this is a direct get(), which is also what lets firestore.rules verify a guest session
+// against the same doc without an indexed query.
+export async function getShareLinkByToken(token: string): Promise<ShareLink | null> {
+  const snap = await getDoc(doc(requireDb(), 'shareLinks', token));
+  return snap.exists() ? ({ id: snap.id, ...(snap.data() as DocumentData) } as ShareLink) : null;
+}
+
+/**
+ * One-time data-shape fix, same pattern as migrateLegacyMembershipIds: share links created
+ * before doc ID == token (the seed data, and any created before this fix shipped) live under
+ * an arbitrary `share_<timestamp>` ID. getShareLinkByToken and firestore.rules' guest-session
+ * checks both look a share link up by `shareLinks/{token}` directly — a link under the wrong ID
+ * is invisible to that lookup, so an already-distributed link would silently keep 404ing.
+ */
+export async function migrateLegacyShareLinkIds(): Promise<number> {
+  const database = requireDb();
+  const snap = await getDocs(collection(database, 'shareLinks'));
+  const stale = snap.docs.filter((d) => d.id !== (d.data() as ShareLink).token);
+  if (stale.length === 0) return 0;
+
+  const batch = writeBatch(database);
+  stale.forEach((d) => {
+    const data = d.data() as ShareLink;
+    batch.set(doc(database, 'shareLinks', data.token), { ...data, id: data.token });
+    batch.delete(d.ref);
+  });
+  await batch.commit();
+  return stale.length;
+}
+
+// ---- Guest sessions (share-link visitors) ----
+// A share-link visitor signs in anonymously (see signInGuest in lib/firebase.ts) and then
+// creates exactly this one doc, keyed by their own uid, citing the token they hold. firestore.
+// rules validates the claim against the real shareLinks doc at write time and never lets it be
+// updated afterward — see the rules file for the actual access grant this doc unlocks.
+export const createGuestSession = (
+  uid: string,
+  session: { token: string; boardId: string; permission: SharePermission }
+) => setDoc(doc(requireDb(), 'guestSessions', uid), { ...session, createdAt: new Date().toISOString() });
 
 // ---- Calendar connections ----
 export const subscribeAllCalendarConnections = (

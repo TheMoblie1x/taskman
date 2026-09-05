@@ -33,8 +33,10 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose }) => {
     (s) => s.boardId === (activeBoard?.id || '') && s.isActive
   );
 
+  // BASE_URL (e.g. "/Collab/") is where this build is actually mounted (see vite.config.ts) —
+  // the link must include it or it 404s once the app is served from under that path.
   const shareUrl = currentBoardShare
-    ? `${window.location.origin}/share/${currentBoardShare.token}`
+    ? `${window.location.origin}${import.meta.env.BASE_URL}share/${currentBoardShare.token}`
     : '';
 
   const handleInviteSubmit = (e: React.FormEvent) => {

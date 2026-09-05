@@ -1,19 +1,25 @@
 rules_version = '2';
 
 // Real per-user authorization: every client signs in with their own Google account (see
-// src/lib/firebase.ts, signInWithGoogle) — anonymous auth is gone. Workspace membership is
-// looked up by a deterministic doc ID (workspaceId + lowercased email, built by
-// src/data/firestoreRepository.ts's membershipDocId) so a plain exists() check can answer
-// "is this signed-in email a member of this workspace" without an indexed query.
+// src/lib/firebase.ts, signInWithGoogle). Workspace membership is looked up by a deterministic
+// doc ID (workspaceId + lowercased email, built by src/data/firestoreRepository.ts's
+// membershipDocId) so a plain exists() check can answer "is this signed-in email a member of
+// this workspace" without an indexed query.
+//
+// Anonymous auth exists for exactly one narrow purpose: a share-link visitor (ShareGuestApp.tsx)
+// who registers a guestSessions/{uid} doc citing a real, active shareLinks token — see that
+// collection's rules and isGuestForBoard() below. It grants nothing beyond read (and, for an
+// "editor" link, update) on the tickets of the one board that link names.
 //
 // Known simplification (tracked in PROGRESS.md, not done here): `workspaceMembers` itself only
 // requires being signed in, not already being a member — tightening that to "can only write
 // your own membership, or extend one if you're already an owner/admin" is real per-row ACL
-// logic and a bigger change. `workspaces`/`projects`/`boards`/`users`/`shareLinks`/
-// `calendarConnections` are also just "any signed-in user" for the same reason: boards/projects
-// don't carry a workspaceId field to check against directly. `tickets`/`goals`/`docPages`/
-// `notifications` (the collections people actually read/write while using a workspace) get the
-// real membership check below, which is the part that matters most for genuine multi-user use.
+// logic and a bigger change. `workspaces`/`projects`/`users`/`calendarConnections` are also just
+// "any signed-in user" for the same reason: projects don't carry a workspaceId field to check
+// against directly. `tickets`/`goals`/`docPages`/`notifications` (the collections people
+// actually read/write while using a workspace) get the real membership check below, which is
+// the part that matters most for genuine multi-user use. `boards` and `shareLinks` get their
+// own rules further down since guests need narrow, board-scoped access to both.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() {
@@ -26,8 +32,30 @@ service cloud.firestore {
       );
     }
 
+    // Share-link guests: an anonymous session (no email, fails signedIn()) that has registered
+    // guestSessions/{uid} citing a token — see that collection's rules below for how the claim
+    // itself is verified at write time. isGuestForBoard/isEditingGuestForBoard re-check the
+    // cited shareLinks doc's isActive flag on every access (not just once at session creation),
+    // so revoking a link takes effect immediately even for a guest already mid-session.
+    function guestSessionData() {
+      return get(/databases/$(database)/documents/guestSessions/$(request.auth.uid)).data;
+    }
+
+    function isGuestForBoard(boardId) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/guestSessions/$(request.auth.uid))
+        && guestSessionData().boardId == boardId
+        && get(/databases/$(database)/documents/shareLinks/$(guestSessionData().token)).data.isActive == true;
+    }
+
+    function isEditingGuestForBoard(boardId) {
+      return isGuestForBoard(boardId) && guestSessionData().permission == 'editor';
+    }
+
     match /tickets/{ticketId} {
-      allow read, update, delete: if isWorkspaceMember(resource.data.workspaceId);
+      allow read: if isWorkspaceMember(resource.data.workspaceId) || isGuestForBoard(resource.data.boardId);
+      allow update: if isWorkspaceMember(resource.data.workspaceId) || isEditingGuestForBoard(resource.data.boardId);
+      allow delete: if isWorkspaceMember(resource.data.workspaceId);
       allow create: if isWorkspaceMember(request.resource.data.workspaceId);
     }
 
@@ -44,6 +72,39 @@ service cloud.firestore {
     match /notifications/{notificationId} {
       allow read, update, delete: if isWorkspaceMember(resource.data.workspaceId);
       allow create: if isWorkspaceMember(request.resource.data.workspaceId);
+    }
+
+    // Boards: signed-in members keep the existing "any signed-in user" access via the
+    // catch-all below; a share-link guest additionally gets read-only access to the exact
+    // board their link points to (to render its name/columns), never write.
+    match /boards/{boardId} {
+      allow read: if signedIn() || isGuestForBoard(boardId);
+      allow write: if signedIn();
+    }
+
+    // Share links: signed-in members manage these as before (catch-all covers create/revoke
+    // from the Share modal); a guest may read only the exact link their own session cites, to
+    // display its permission/active status — not enumerate anyone else's links.
+    match /shareLinks/{token} {
+      allow read: if signedIn()
+        || (request.auth != null
+            && exists(/databases/$(database)/documents/guestSessions/$(request.auth.uid))
+            && guestSessionData().token == token);
+      allow write: if signedIn();
+    }
+
+    // Guest sessions: a share-link visitor's own anonymous uid self-registers as a viewer/
+    // editor of one board, but only by citing a real, currently-active shareLinks doc whose
+    // boardId/permission the claim must match exactly — an anonymous client can't forge access
+    // to a board it doesn't hold a valid link for. Immutable once created, so a guest can't
+    // later rewrite their own session to escalate permission or retarget another board.
+    match /guestSessions/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.boardId == get(/databases/$(database)/documents/shareLinks/$(request.resource.data.token)).data.boardId
+        && request.resource.data.permission == get(/databases/$(database)/documents/shareLinks/$(request.resource.data.token)).data.permission
+        && get(/databases/$(database)/documents/shareLinks/$(request.resource.data.token)).data.isActive == true;
+      allow update, delete: if false;
     }
 
     match /{document=**} {

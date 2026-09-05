@@ -672,6 +672,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.error('Membership ID migration failed:', e);
       }
 
+      try {
+        const migratedLinks = await repo.migrateLegacyShareLinkIds();
+        if (migratedLinks > 0) console.log(`Migrated ${migratedLinks} legacy share link doc ID(s).`);
+      } catch (e) {
+        console.error('Share link ID migration failed:', e);
+      }
+
       if (cancelled) return;
 
       unsubscribers.push(repo.subscribeWorkspaces(setWorkspaces));
@@ -1619,7 +1626,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     (boardId: string, permission: SharePermission) => {
       const token = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
       const newLink: ShareLink = {
-        id: `share_${Date.now()}`,
+        // The doc ID equals the token — getShareLinkByToken and firestore.rules' guest-session
+        // check both look this doc up as shareLinks/{token} directly, not by a field query.
+        id: token,
         boardId,
         token,
         permission,
