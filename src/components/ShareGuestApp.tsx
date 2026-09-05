@@ -59,24 +59,39 @@ export const ShareGuestApp: React.FC<{ token: string }> = ({ token }) => {
         // require request.auth to be non-null for that lookup, and there's no guestSessions doc
         // yet to satisfy the alternative "already a guest for this board" check.
         const guest = await signInGuest();
+        console.log('[share-diag] signInGuest ok, uid=', guest?.uid);
         if (!guest) {
           if (!cancelled) setStatus('invalid');
           return;
         }
 
-        const link = await repo.getShareLinkByToken(token);
+        const link = await repo.getShareLinkByToken(token).catch((e) => {
+          console.error('[share-diag] getShareLinkByToken threw', e);
+          throw e;
+        });
+        console.log('[share-diag] getShareLinkByToken ok, link=', link);
         if (!link || !link.isActive) {
           if (!cancelled) setStatus('invalid');
           return;
         }
 
-        await repo.createGuestSession(guest.uid, {
-          token,
-          boardId: link.boardId,
-          permission: link.permission,
-        });
+        await repo
+          .createGuestSession(guest.uid, {
+            token,
+            boardId: link.boardId,
+            permission: link.permission,
+          })
+          .catch((e) => {
+            console.error('[share-diag] createGuestSession threw', e);
+            throw e;
+          });
+        console.log('[share-diag] createGuestSession ok');
 
-        const boardDoc = await repo.getBoardById(link.boardId);
+        const boardDoc = await repo.getBoardById(link.boardId).catch((e) => {
+          console.error('[share-diag] getBoardById threw', e);
+          throw e;
+        });
+        console.log('[share-diag] getBoardById ok, board=', boardDoc);
         if (!boardDoc) {
           if (!cancelled) setStatus('invalid');
           return;

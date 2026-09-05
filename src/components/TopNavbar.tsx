@@ -95,7 +95,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
             <GoogleIcon name="view_kanban" size={14} />
           </div>
           <span className="font-bold text-slate-900 dark:text-white text-sm tracking-tight hidden sm:inline">
-            FlowKanban
+            Collab
           </span>
         </div>
 

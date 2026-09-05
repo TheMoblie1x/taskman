@@ -25,7 +25,7 @@ export const LoginScreen: React.FC = () => {
         <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold mx-auto mb-4 shadow-2xs">
           <GoogleIcon name="view_kanban" size={24} />
         </div>
-        <h1 className="text-lg font-bold text-slate-900 dark:text-white mb-1">FlowKanban</h1>
+        <h1 className="text-lg font-bold text-slate-900 dark:text-white mb-1">Collab</h1>
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
           Sign in with your Google account to access your workspaces and collaborate with your team.
         </p>

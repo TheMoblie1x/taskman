@@ -735,7 +735,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             <div className="space-y-4">
               <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-3">
                 <div>
-                  <div className="font-bold text-slate-800 text-sm">FlowKanban</div>
+                  <div className="font-bold text-slate-800 text-sm">Collab</div>
                   <div className="text-[11px] text-slate-400">Version 1.0.0</div>
                 </div>
 
@@ -757,7 +757,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </div>
 
               <p className="text-[10px] text-slate-400 text-center leading-relaxed">
-                © 2026 FlowKanban. All rights reserved.
+                © 2026 Collab. All rights reserved.
                 <br />
                 License fields shown here are placeholders pending a connected licensing service.
               </p>
