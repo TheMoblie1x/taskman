@@ -97,15 +97,19 @@ service cloud.firestore {
     // Guest sessions: a share-link visitor's own anonymous uid self-registers as a viewer/
     // editor of one board, but only by citing a real, currently-active shareLinks doc whose
     // boardId/permission the claim must match exactly — an anonymous client can't forge access
-    // to a board it doesn't hold a valid link for. Immutable once created, so a guest can't
-    // later rewrite their own session to escalate permission or retarget another board.
+    // to a board it doesn't hold a valid link for. `update` gets the same validation as
+    // `create` (re-checked against the real shareLinks doc every write, so a guest still can't
+    // forge access to a board they hold no link for) rather than being blocked outright —
+    // anonymous auth persists the same uid across visits, so a returning guest, or one who
+    // opens a second share link in the same browser, must be able to re-write their one
+    // session doc instead of getting permanently locked out after their first visit.
     match /guestSessions/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
-      allow create: if request.auth != null && request.auth.uid == uid
+      allow create, update: if request.auth != null && request.auth.uid == uid
         && request.resource.data.boardId == get(/databases/$(database)/documents/shareLinks/$(request.resource.data.token)).data.boardId
         && request.resource.data.permission == get(/databases/$(database)/documents/shareLinks/$(request.resource.data.token)).data.permission
         && get(/databases/$(database)/documents/shareLinks/$(request.resource.data.token)).data.isActive == true;
-      allow update, delete: if false;
+      allow delete: if false;
     }
 
     match /{document=**} {
