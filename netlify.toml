@@ -9,3 +9,12 @@
   # this config, so Netlify's secrets scanner flagging them in the build output is a false
   # positive for this app — omit them from that scan rather than disabling it entirely.
   SECRETS_SCAN_OMIT_KEYS = "VITE_FIREBASE_API_KEY,VITE_FIREBASE_AUTH_DOMAIN,VITE_FIREBASE_PROJECT_ID,VITE_FIREBASE_STORAGE_BUCKET,VITE_FIREBASE_MESSAGING_SENDER_ID,VITE_FIREBASE_APP_ID,VITE_FIREBASE_MEASUREMENT_ID"
+
+# The build is compiled with base path /Collab/ (see vite.config.ts) so it can be proxied
+# under mobile1x.com/Collab. This site's own assets physically live at the root of `dist`,
+# so rewrite /Collab/* back to root here — keeps this Netlify URL itself working directly,
+# not just when reverse-proxied from mobile1x.com.
+[[redirects]]
+  from = "/Collab/*"
+  to = "/:splat"
+  status = 200
