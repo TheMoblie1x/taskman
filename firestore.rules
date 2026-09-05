@@ -83,13 +83,14 @@ service cloud.firestore {
     }
 
     // Share links: signed-in members manage these as before (catch-all covers create/revoke
-    // from the Share modal); a guest may read only the exact link their own session cites, to
-    // display its permission/active status — not enumerate anyone else's links.
+    // from the Share modal). A brand-new guest has no guestSessions doc yet — that's created
+    // *after* this lookup, using the boardId/permission it returns — so the read can't require
+    // one without a chicken-and-egg deadlock. Knowing the token (a random doc ID from the URL)
+    // is itself the credential, so any authenticated request, anonymous included, may fetch
+    // that one exact doc; `list` stays members-only so nobody can enumerate the collection.
     match /shareLinks/{token} {
-      allow read: if signedIn()
-        || (request.auth != null
-            && exists(/databases/$(database)/documents/guestSessions/$(request.auth.uid))
-            && guestSessionData().token == token);
+      allow get: if request.auth != null;
+      allow list: if signedIn();
       allow write: if signedIn();
     }
 

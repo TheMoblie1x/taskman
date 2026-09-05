@@ -55,14 +55,17 @@ export const ShareGuestApp: React.FC<{ token: string }> = ({ token }) => {
 
     (async () => {
       try {
-        const link = await repo.getShareLinkByToken(token);
-        if (!link || !link.isActive) {
+        // Sign in (even anonymously) before the very first shareLinks read — Firestore rules
+        // require request.auth to be non-null for that lookup, and there's no guestSessions doc
+        // yet to satisfy the alternative "already a guest for this board" check.
+        const guest = await signInGuest();
+        if (!guest) {
           if (!cancelled) setStatus('invalid');
           return;
         }
 
-        const guest = await signInGuest();
-        if (!guest) {
+        const link = await repo.getShareLinkByToken(token);
+        if (!link || !link.isActive) {
           if (!cancelled) setStatus('invalid');
           return;
         }
