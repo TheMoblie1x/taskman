@@ -2,6 +2,8 @@ export type TicketType = 'task' | 'bug' | 'feature' | 'story' | 'epic';
 export type TicketPriority = 'highest' | 'high' | 'medium' | 'low' | 'lowest';
 export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'guest';
 export type SharePermission = 'viewer' | 'editor';
+// Access level when a workspace or a single project is shared with someone by email.
+export type ShareAccess = 'editor' | 'viewer';
 
 export interface User {
   id: string;
@@ -39,6 +41,21 @@ export interface Project {
   color: string; // Tailwind color class or hex
   createdBy: string;
   createdAt: string;
+}
+
+// A person granted access to one specific project by email. Independent of WorkspaceMember:
+// it overrides that person's effective view/edit permission for this project only. Anyone with
+// a ProjectMember row is also kept as at least a workspace `guest` so Firestore's
+// workspace-membership rules (tickets/goals/docs) still let them load the project's data.
+export interface ProjectMember {
+  id: string; // deterministic: `${projectId}__${lowercased email}`
+  projectId: string;
+  workspaceId: string;
+  user: User;
+  access: ShareAccess;
+  status: 'active' | 'invited';
+  addedBy: string;
+  joinedAt: string;
 }
 
 export interface BoardColumn {

@@ -4,6 +4,8 @@ import {
   Workspace,
   WorkspaceMember,
   Project,
+  ProjectMember,
+  ShareAccess,
   Board,
   BoardColumn,
   Ticket,
@@ -85,6 +87,10 @@ interface AppContextType {
   workspaceMembers: WorkspaceMember[];
   inviteMember: (email: string, role: WorkspaceRole) => void;
   updateMemberRole: (userId: string, role: WorkspaceRole) => void;
+  // Share the whole workspace by email with view-only or edit access, then manage those people.
+  shareWorkspace: (email: string, access: ShareAccess) => void;
+  updateMemberAccess: (userId: string, access: ShareAccess) => void;
+  removeMember: (userId: string) => void;
 
   // Projects
   projects: Project[];
@@ -92,6 +98,14 @@ interface AppContextType {
   activeProject: Project | null;
   setActiveProjectId: (id: string) => void;
   createProject: (data: { name: string; key: string; description: string; color: string; icon: string }) => Project;
+
+  // Per-project email shares (override a person's view/edit access for one project)
+  projectMembers: ProjectMember[];
+  workspaceProjectMembers: ProjectMember[];
+  getProjectAccess: (projectId?: string | null) => ShareAccess | 'none';
+  shareProject: (projectId: string, email: string, access: ShareAccess) => void;
+  updateProjectMemberAccess: (projectId: string, userId: string, access: ShareAccess) => void;
+  removeProjectMember: (projectId: string, userId: string) => void;
 
   // Boards
   boards: Board[];
@@ -274,6 +288,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>([]);
 
   const [projects, setProjects] = useState<Project[]>([]);
+  const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string>('');
 
   const [boards, setBoards] = useState<Board[]>([]);
@@ -691,6 +706,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubscribers.push(repo.subscribeWorkspaces(setWorkspaces));
       unsubscribers.push(repo.subscribeUsers(setAllUsers));
       unsubscribers.push(repo.subscribeAllProjects(setProjects));
+      unsubscribers.push(repo.subscribeAllProjectMembers(setProjectMembers));
       unsubscribers.push(repo.subscribeAllBoards(setBoards));
       unsubscribers.push(repo.subscribeAllShareLinks(setShareLinks));
       unsubscribers.push(repo.subscribeAllCalendarConnections(setCalendarConnections));
@@ -730,21 +746,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const activeWorkspace: Workspace =
     workspaces.find((w) => w.id === activeWorkspaceId) || workspaces[0] || { id: '', name: '', ownerId: '', createdAt: '' };
 
-  // Workspace-scoped derived data. activeWorkspaceId is the single source of truth here —
-  // every workspace-scoped view should read from these instead of the raw top-level arrays.
-  const workspaceProjects = projects.filter((p) => p.workspaceId === activeWorkspace.id);
-  const workspaceProjectIds = new Set(workspaceProjects.map((p) => p.id));
-  const workspaceBoards = boards.filter((b) => workspaceProjectIds.has(b.projectId));
-  const workspaceTickets = tickets.filter((t) => workspaceProjectIds.has(t.projectId));
-  const workspaceNotifications = notifications.filter((n) => n.workspaceId === activeWorkspace.id);
-  const workspaceGoals = goals.filter((g) => g.workspaceId === activeWorkspace.id);
-  const workspaceDocPages = docPages.filter((d) => d.workspaceId === activeWorkspace.id);
-
-  const activeProject = workspaceProjects.find((p) => p.id === activeProjectId) || workspaceProjects[0] || null;
-  const activeBoard = activeProject ? boards.find((b) => b.projectId === activeProject.id) || null : null;
-
-  const selectedTicket = tickets.find((t) => t.id === selectedTicketId) || null;
-
   // Real identity when Firebase is configured: the signed-in Firebase user's own users/{uid}
   // Firestore doc (falling back to a profile built straight from the auth token for the brief
   // window before that doc's first snapshot arrives). Without Firebase configured at all,
@@ -762,7 +763,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     : { id: '', googleId: '', email: '', name: '', avatarUrl: '', role: 'guest' };
 
-  const userCanEdit = !isGuestViewer && currentUser.role !== 'guest';
+  const myEmail = (currentUser.email || '').toLowerCase();
+
+  // Workspace-scoped derived data. activeWorkspaceId is the single source of truth here —
+  // every workspace-scoped view should read from these instead of the raw top-level arrays.
+  const workspaceMembersScoped = workspaceMembers.filter((m) => m.workspaceId === activeWorkspace.id);
+  const workspaceProjectMembers = projectMembers.filter((pm) => pm.workspaceId === activeWorkspace.id);
+
+  // This person's role in the active workspace (per-workspace, unlike currentUser.role which is
+  // just their profile default). Falls back to the profile role until membership rows load.
+  const myWorkspaceRole =
+    workspaceMembersScoped.find((m) => m.user.id === currentUser.id || m.user.email.toLowerCase() === myEmail)?.role ||
+    currentUser.role;
+
+  // Effective view/edit access for one project: an explicit per-project share wins; otherwise
+  // fall back to the workspace role (guest → view-only, everyone else → edit).
+  const getProjectAccess = useCallback(
+    (projectId?: string | null): ShareAccess | 'none' => {
+      if (!projectId) return myWorkspaceRole === 'guest' ? 'viewer' : 'editor';
+      const row = workspaceProjectMembers.find(
+        (pm) => pm.projectId === projectId && pm.user.email.toLowerCase() === myEmail
+      );
+      if (row) return row.access;
+      return myWorkspaceRole === 'guest' ? 'viewer' : 'editor';
+    },
+    [workspaceProjectMembers, myWorkspaceRole, myEmail]
+  );
+
+  const allWorkspaceProjects = projects.filter((p) => p.workspaceId === activeWorkspace.id);
+  // Full members (owner/admin/member) see every project in the workspace, as before. A guest
+  // only sees the specific projects that were shared with them by email.
+  const workspaceProjects =
+    myWorkspaceRole !== 'guest'
+      ? allWorkspaceProjects
+      : allWorkspaceProjects.filter((p) =>
+          workspaceProjectMembers.some((pm) => pm.projectId === p.id && pm.user.email.toLowerCase() === myEmail)
+        );
+  const workspaceProjectIds = new Set(workspaceProjects.map((p) => p.id));
+  const workspaceBoards = boards.filter((b) => workspaceProjectIds.has(b.projectId));
+  const workspaceTickets = tickets.filter((t) => workspaceProjectIds.has(t.projectId));
+  const workspaceNotifications = notifications.filter((n) => n.workspaceId === activeWorkspace.id);
+  const workspaceGoals = goals.filter((g) => g.workspaceId === activeWorkspace.id);
+  const workspaceDocPages = docPages.filter((d) => d.workspaceId === activeWorkspace.id);
+
+  const activeProject = workspaceProjects.find((p) => p.id === activeProjectId) || workspaceProjects[0] || null;
+  const activeBoard = activeProject ? boards.find((b) => b.projectId === activeProject.id) || null : null;
+
+  const selectedTicket = tickets.find((t) => t.id === selectedTicketId) || null;
+
+  // Edit rights follow the active project's effective access, so a guest shared as "editor" on
+  // one project can edit it, and a member shared as "viewer" is held to read-only there.
+  const userCanEdit = !isGuestViewer && getProjectAccess(activeProject?.id) === 'editor';
   // isAnonymous excludes leftover anonymous sessions from before real auth existed (Phase 6
   // used anonymous sign-in; anyone who tested it has that session cached in their browser) —
   // those have no email, so Firestore rules already reject them, but the login gate should
@@ -905,6 +956,201 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [workspaceMembers]
   );
 
+  // ---- Sharing by email (workspace-wide and per-project) ----
+  // "Can edit" and "View only" are the only choices the share UI offers; they map onto the
+  // existing workspace-role model so Firestore rules and every downstream permission check
+  // keep working unchanged.
+  const accessToRole = (access: ShareAccess): WorkspaceRole => (access === 'editor' ? 'member' : 'guest');
+
+  // Find the User for an email, creating (and persisting) a lightweight placeholder profile if
+  // that person has never signed in — claimPendingInvites swaps in their real profile later.
+  const resolveInvitee = useCallback(
+    (normalizedEmail: string): { user: User; isExisting: boolean } => {
+      const existing = allUsers.find((u) => u.email.toLowerCase() === normalizedEmail);
+      if (existing) return { user: existing, isExisting: true };
+      const placeholder: User = {
+        id: `pending_${normalizedEmail}`,
+        googleId: '',
+        email: normalizedEmail,
+        name: normalizedEmail.split('@')[0],
+        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${normalizedEmail}`,
+        role: 'guest',
+      };
+      setAllUsers((prev) => [...prev, placeholder]);
+      if (isFirebaseConfigured) repo.saveUser(placeholder).catch((e) => console.error('saveUser failed:', e));
+      return { user: placeholder, isExisting: false };
+    },
+    [allUsers]
+  );
+
+  // Upsert a workspace membership for this email at (at least) the given role. Never downgrades
+  // an existing member — a project share for someone who's already an admin shouldn't demote
+  // them to guest.
+  const upsertWorkspaceMember = useCallback(
+    (normalizedEmail: string, user: User, role: WorkspaceRole, isExisting: boolean) => {
+      const id = isFirebaseConfigured ? repo.membershipDocId(activeWorkspace.id, normalizedEmail) : `wm_${Date.now()}`;
+      const current = workspaceMembers.find(
+        (m) => m.workspaceId === activeWorkspace.id && m.user.email.toLowerCase() === normalizedEmail
+      );
+      if (current && (current.role !== 'guest' || role === 'guest')) return; // already at/above this level
+      const member: WorkspaceMember = current
+        ? { ...current, role }
+        : {
+            id,
+            workspaceId: activeWorkspace.id,
+            user,
+            role,
+            status: isExisting ? 'active' : 'invited',
+            joinedAt: new Date().toISOString(),
+          };
+      setWorkspaceMembers((prev) => {
+        const rest = prev.filter((m) => m.id !== member.id);
+        return [...rest, member];
+      });
+      if (isFirebaseConfigured) repo.saveWorkspaceMember(member).catch((e) => console.error('saveWorkspaceMember failed:', e));
+    },
+    [activeWorkspace.id, workspaceMembers]
+  );
+
+  const notifyShare = useCallback(
+    (message: string) => {
+      const newNotif: AppNotification = {
+        id: `notif_${Date.now()}`,
+        userId: currentUser.id,
+        workspaceId: activeWorkspace.id,
+        title: 'Access Shared',
+        message,
+        type: 'invite',
+        read: false,
+        createdAt: new Date().toISOString(),
+      };
+      setNotifications((prev) => [newNotif, ...prev]);
+      if (isFirebaseConfigured) repo.saveNotification(newNotif).catch((e) => console.error('saveNotification failed:', e));
+    },
+    [activeWorkspace.id, activeWorkspace.name, currentUser.id]
+  );
+
+  const shareWorkspace = useCallback(
+    (email: string, access: ShareAccess) => {
+      const normalizedEmail = email.trim().toLowerCase();
+      if (!normalizedEmail) return;
+      const { user, isExisting } = resolveInvitee(normalizedEmail);
+      const role = accessToRole(access);
+      const existingMember = workspaceMembers.find(
+        (m) => m.workspaceId === activeWorkspace.id && m.user.email.toLowerCase() === normalizedEmail
+      );
+      if (existingMember) {
+        // Owners/admins keep their role; otherwise move them to the chosen access level.
+        if (existingMember.role !== 'owner' && existingMember.role !== 'admin' && existingMember.role !== role) {
+          const updated: WorkspaceMember = { ...existingMember, role, user: { ...existingMember.user, role } };
+          setWorkspaceMembers((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+          if (isFirebaseConfigured)
+            repo.saveWorkspaceMember(updated).catch((e) => console.error('saveWorkspaceMember failed:', e));
+        }
+      } else {
+        const id = isFirebaseConfigured ? repo.membershipDocId(activeWorkspace.id, normalizedEmail) : `wm_${Date.now()}`;
+        const member: WorkspaceMember = {
+          id,
+          workspaceId: activeWorkspace.id,
+          user,
+          role,
+          status: isExisting ? 'active' : 'invited',
+          joinedAt: new Date().toISOString(),
+        };
+        setWorkspaceMembers((prev) => [...prev, member]);
+        if (isFirebaseConfigured) repo.saveWorkspaceMember(member).catch((e) => console.error('saveWorkspaceMember failed:', e));
+      }
+      notifyShare(`Shared ${activeWorkspace.name} with ${normalizedEmail} (${access === 'editor' ? 'can edit' : 'view only'}).`);
+    },
+    [activeWorkspace.id, activeWorkspace.name, workspaceMembers, resolveInvitee, notifyShare]
+  );
+
+  const updateMemberAccess = useCallback(
+    (userId: string, access: ShareAccess) => updateMemberRole(userId, accessToRole(access)),
+    [updateMemberRole]
+  );
+
+  const removeMember = useCallback(
+    (userId: string) => {
+      const member = workspaceMembers.find(
+        (m) => m.workspaceId === activeWorkspace.id && m.user.id === userId
+      );
+      if (!member || member.role === 'owner') return;
+      setWorkspaceMembers((prev) => prev.filter((m) => m.id !== member.id));
+      // Also drop any per-project shares this person held in the workspace.
+      const email = member.user.email.toLowerCase();
+      const staleProjectMembers = projectMembers.filter(
+        (pm) => pm.workspaceId === activeWorkspace.id && pm.user.email.toLowerCase() === email
+      );
+      setProjectMembers((prev) => prev.filter((pm) => !staleProjectMembers.some((s) => s.id === pm.id)));
+      if (isFirebaseConfigured) {
+        repo.deleteWorkspaceMember(member.id).catch((e) => console.error('deleteWorkspaceMember failed:', e));
+        staleProjectMembers.forEach((pm) =>
+          repo.deleteProjectMember(pm.id).catch((e) => console.error('deleteProjectMember failed:', e))
+        );
+      }
+    },
+    [activeWorkspace.id, workspaceMembers, projectMembers]
+  );
+
+  const shareProject = useCallback(
+    (projectId: string, email: string, access: ShareAccess) => {
+      const normalizedEmail = email.trim().toLowerCase();
+      if (!normalizedEmail || !projectId) return;
+      const project = projects.find((p) => p.id === projectId);
+      if (!project) return;
+      const { user, isExisting } = resolveInvitee(normalizedEmail);
+      // A per-project share still needs a workspace foothold so Firestore's membership rules let
+      // them load the project's tickets/goals — join them as a guest if they're not in yet.
+      upsertWorkspaceMember(normalizedEmail, user, 'guest', isExisting);
+
+      const id = repo.projectMemberDocId(projectId, normalizedEmail);
+      const existing = projectMembers.find((pm) => pm.id === id);
+      const member: ProjectMember = existing
+        ? { ...existing, access, user }
+        : {
+            id,
+            projectId,
+            workspaceId: project.workspaceId,
+            user,
+            access,
+            status: isExisting ? 'active' : 'invited',
+            addedBy: currentUser.id,
+            joinedAt: new Date().toISOString(),
+          };
+      setProjectMembers((prev) => {
+        const rest = prev.filter((pm) => pm.id !== id);
+        return [...rest, member];
+      });
+      if (isFirebaseConfigured) repo.saveProjectMember(member).catch((e) => console.error('saveProjectMember failed:', e));
+      notifyShare(
+        `Shared project "${project.name}" with ${normalizedEmail} (${access === 'editor' ? 'can edit' : 'view only'}).`
+      );
+    },
+    [projects, projectMembers, currentUser.id, resolveInvitee, upsertWorkspaceMember, notifyShare]
+  );
+
+  const updateProjectMemberAccess = useCallback(
+    (projectId: string, userId: string, access: ShareAccess) => {
+      const member = projectMembers.find((pm) => pm.projectId === projectId && pm.user.id === userId);
+      if (!member) return;
+      const updated: ProjectMember = { ...member, access };
+      setProjectMembers((prev) => prev.map((pm) => (pm.id === updated.id ? updated : pm)));
+      if (isFirebaseConfigured) repo.saveProjectMember(updated).catch((e) => console.error('saveProjectMember failed:', e));
+    },
+    [projectMembers]
+  );
+
+  const removeProjectMember = useCallback(
+    (projectId: string, userId: string) => {
+      const member = projectMembers.find((pm) => pm.projectId === projectId && pm.user.id === userId);
+      if (!member) return;
+      setProjectMembers((prev) => prev.filter((pm) => pm.id !== member.id));
+      if (isFirebaseConfigured) repo.deleteProjectMember(member.id).catch((e) => console.error('deleteProjectMember failed:', e));
+    },
+    [projectMembers]
+  );
+
   // Create Project
   const createProject = useCallback(
     (data: { name: string; key: string; description: string; color: string; icon: string }) => {
@@ -921,6 +1167,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
       setProjects((prev) => [...prev, newProj]);
       setActiveProjectId(newProj.id);
+      if (isFirebaseConfigured) repo.saveProject(newProj).catch((e) => console.error('saveProject failed:', e));
 
       // Create default board for new project
       const newBoard: Board = {
@@ -937,6 +1184,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createdAt: new Date().toISOString(),
       };
       setBoards((prev) => [...prev, newBoard]);
+      if (isFirebaseConfigured) repo.saveBoard(newBoard).catch((e) => console.error('saveBoard failed:', e));
       return newProj;
     },
     [activeWorkspace.id, currentUser.id]
@@ -1721,11 +1969,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         workspaceMembers,
         inviteMember,
         updateMemberRole,
+        shareWorkspace,
+        updateMemberAccess,
+        removeMember,
         projects,
         workspaceProjects,
         activeProject,
         setActiveProjectId,
         createProject,
+        projectMembers,
+        workspaceProjectMembers,
+        getProjectAccess,
+        shareProject,
+        updateProjectMemberAccess,
+        removeProjectMember,
         boards,
         workspaceBoards,
         activeBoard,

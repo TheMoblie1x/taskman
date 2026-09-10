@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { WorkspaceRole, SharePermission } from '../types';
+import { ShareAccess, SharePermission } from '../types';
 import { GoogleIcon } from './GoogleIcon';
 
 interface ShareModalProps {
@@ -8,12 +8,24 @@ interface ShareModalProps {
   onClose: () => void;
 }
 
+type ShareScope = 'project' | 'workspace';
+
+const ACCESS_LABEL: Record<ShareAccess, string> = { editor: 'Can edit', viewer: 'View only' };
+
 export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose }) => {
   const {
+    currentUser,
     activeProject,
     activeBoard,
-    inviteMember,
+    activeWorkspace,
     workspaceMembers,
+    shareWorkspace,
+    updateMemberAccess,
+    removeMember,
+    workspaceProjectMembers,
+    shareProject,
+    updateProjectMemberAccess,
+    removeProjectMember,
     shareLinks,
     createShareLink,
     revokeShareLink,
@@ -21,17 +33,16 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose }) => {
     setIsGuestViewer,
   } = useApp();
 
+  const [scope, setScope] = useState<ShareScope>(activeProject ? 'project' : 'workspace');
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<WorkspaceRole>('member');
+  const [inviteAccess, setInviteAccess] = useState<ShareAccess>('editor');
   const [linkPermission, setLinkPermission] = useState<SharePermission>('editor');
   const [copiedLink, setCopiedLink] = useState(false);
   const [inviteSuccess, setInviteSuccess] = useState(false);
 
   if (!isOpen) return null;
 
-  const currentBoardShare = shareLinks.find(
-    (s) => s.boardId === (activeBoard?.id || '') && s.isActive
-  );
+  const currentBoardShare = shareLinks.find((s) => s.boardId === (activeBoard?.id || '') && s.isActive);
 
   // BASE_URL (e.g. "/Collab/") is where this build is actually mounted (see vite.config.ts) —
   // the link must include it or it 404s once the app is served from under that path.
@@ -39,10 +50,23 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose }) => {
     ? `${window.location.origin}${import.meta.env.BASE_URL}share/${currentBoardShare.token}`
     : '';
 
+  const wsMembers = workspaceMembers.filter((m) => m.workspaceId === activeWorkspace.id);
+  const projMembers = activeProject
+    ? workspaceProjectMembers.filter((pm) => pm.projectId === activeProject.id)
+    : [];
+
+  const scopeName = scope === 'project' ? activeProject?.name ?? 'this project' : activeWorkspace.name;
+
   const handleInviteSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inviteEmail.trim()) return;
-    inviteMember(inviteEmail.trim(), inviteRole);
+    const email = inviteEmail.trim();
+    if (!email) return;
+    if (scope === 'project') {
+      if (!activeProject) return;
+      shareProject(activeProject.id, email, inviteAccess);
+    } else {
+      shareWorkspace(email, inviteAccess);
+    }
     setInviteEmail('');
     setInviteSuccess(true);
     setTimeout(() => setInviteSuccess(false), 3000);
@@ -61,6 +85,19 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
+  const scopeTab = (value: ShareScope, label: string, disabled = false) => (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => setScope(value)}
+      className={`flex-1 px-2.5 py-1 rounded text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+        scope === value ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-500 hover:text-slate-700'
+      }`}
+    >
+      {label}
+    </button>
+  );
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-3 bg-slate-900/40 backdrop-blur-2xs">
       <div className="bg-white rounded-lg shadow-xl border border-slate-200 max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
@@ -71,24 +108,27 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose }) => {
               <GoogleIcon name="share" size={14} />
             </div>
             <div>
-              <h3 className="font-bold text-slate-800 text-xs">Share "{activeProject?.name}"</h3>
-              <p className="text-[10px] text-slate-500">Collaborate with your team or clients</p>
+              <h3 className="font-bold text-slate-800 text-xs">Share "{scopeName}"</h3>
+              <p className="text-[10px] text-slate-500">Invite people by email with view or edit access</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded"
-          >
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded">
             <GoogleIcon name="close" size={16} />
           </button>
         </div>
 
         <div className="p-4 space-y-4 text-xs">
-          {/* 1. Invite User via Email */}
+          {/* Scope toggle */}
+          <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-md">
+            {scopeTab('project', activeProject ? `Project · ${activeProject.name}` : 'This project', !activeProject)}
+            {scopeTab('workspace', `Workspace · ${activeWorkspace.name}`)}
+          </div>
+
+          {/* 1. Invite by email */}
           <div className="space-y-2">
             <h4 className="font-bold text-slate-700 flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
               <GoogleIcon name="mail" size={14} className="text-blue-600" />
-              <span>Invite via Email</span>
+              <span>Invite via email</span>
             </h4>
 
             <form onSubmit={handleInviteSubmit} className="space-y-1.5">
@@ -102,33 +142,124 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose }) => {
                   className="flex-1 border border-slate-200 rounded p-1.5 text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
                 />
                 <select
-                  value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value as WorkspaceRole)}
+                  value={inviteAccess}
+                  onChange={(e) => setInviteAccess(e.target.value as ShareAccess)}
                   className="border border-slate-200 rounded px-2 py-1.5 bg-slate-50 font-medium text-slate-700 text-xs"
                 >
-                  <option value="member">Member (Can edit)</option>
-                  <option value="admin">Admin</option>
-                  <option value="guest">Viewer (Read-only)</option>
+                  <option value="editor">Can edit</option>
+                  <option value="viewer">View only</option>
                 </select>
                 <button
                   type="submit"
                   className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded shadow-2xs transition-colors text-xs"
                 >
-                  Invite
+                  Share
                 </button>
               </div>
+              <p className="text-[10px] text-slate-400">
+                {scope === 'project'
+                  ? 'They get access to this project only. If they are not in the workspace yet, they are added as a guest.'
+                  : 'They get access to every project and board in this workspace.'}
+              </p>
               {inviteSuccess && (
                 <div className="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
                   <GoogleIcon name="check" size={12} />
-                  <span>Invitation sent successfully!</span>
+                  <span>{scopeName} shared with that email.</span>
                 </div>
               )}
             </form>
           </div>
 
+          {/* 2. People with access */}
+          <div className="space-y-1.5">
+            <h4 className="font-bold text-slate-700 flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
+              <GoogleIcon name="group" size={14} className="text-blue-600" />
+              <span>People with access</span>
+            </h4>
+
+            <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-56 overflow-y-auto">
+              {scope === 'workspace'
+                ? wsMembers.map((m) => {
+                    const isOwner = m.role === 'owner';
+                    const isSelf = m.user.id === currentUser.id;
+                    return (
+                      <div key={m.id} className="p-2 flex items-center gap-2">
+                        <img src={m.user.avatarUrl} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-slate-800 truncate flex items-center gap-1.5">
+                            {m.user.name}
+                            {isSelf && (
+                              <span className="text-[9px] bg-blue-100 text-blue-700 px-1 rounded font-semibold">You</span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-400 truncate">{m.user.email}</div>
+                        </div>
+                        {isOwner ? (
+                          <span className="text-[10px] font-semibold text-slate-500 px-1.5">Owner</span>
+                        ) : (
+                          <select
+                            value={m.role === 'guest' ? 'viewer' : 'editor'}
+                            onChange={(e) => updateMemberAccess(m.user.id, e.target.value as ShareAccess)}
+                            className="border border-slate-200 rounded px-1.5 py-1 bg-slate-50 font-medium text-slate-600 text-[11px]"
+                          >
+                            <option value="editor">Can edit</option>
+                            <option value="viewer">View only</option>
+                          </select>
+                        )}
+                        {!isOwner && !isSelf && (
+                          <button
+                            onClick={() => removeMember(m.user.id)}
+                            title="Remove access"
+                            className="p-1 text-slate-300 hover:text-rose-600 shrink-0"
+                          >
+                            <GoogleIcon name="close" size={14} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                : projMembers.length === 0
+                ? (
+                  <div className="p-3 text-[11px] text-slate-400">
+                    No one is shared on this project directly yet. Workspace members already have{' '}
+                    {ACCESS_LABEL.editor.toLowerCase()} access.
+                  </div>
+                )
+                : projMembers.map((pm) => (
+                    <div key={pm.id} className="p-2 flex items-center gap-2">
+                      <img src={pm.user.avatarUrl} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-slate-800 truncate">{pm.user.name}</div>
+                        <div className="text-[10px] text-slate-400 truncate">
+                          {pm.user.email}
+                          {pm.status === 'invited' && ' · invited'}
+                        </div>
+                      </div>
+                      <select
+                        value={pm.access}
+                        onChange={(e) =>
+                          activeProject && updateProjectMemberAccess(activeProject.id, pm.user.id, e.target.value as ShareAccess)
+                        }
+                        className="border border-slate-200 rounded px-1.5 py-1 bg-slate-50 font-medium text-slate-600 text-[11px]"
+                      >
+                        <option value="editor">Can edit</option>
+                        <option value="viewer">View only</option>
+                      </select>
+                      <button
+                        onClick={() => activeProject && removeProjectMember(activeProject.id, pm.user.id)}
+                        title="Remove access"
+                        className="p-1 text-slate-300 hover:text-rose-600 shrink-0"
+                      >
+                        <GoogleIcon name="close" size={14} />
+                      </button>
+                    </div>
+                  ))}
+            </div>
+          </div>
+
           <div className="h-px bg-slate-100" />
 
-          {/* 2. Public Share Link */}
+          {/* 3. Public Share Link */}
           <div className="space-y-2">
             <h4 className="font-bold text-slate-700 flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
               <GoogleIcon name="link" size={14} className="text-blue-600" />
@@ -220,7 +351,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose }) => {
 
           <div className="h-px bg-slate-100" />
 
-          {/* 3. Live Preview as Guest Toggle */}
+          {/* 4. Live Preview as Guest Toggle */}
           <div className="p-2.5 bg-amber-50/70 border border-amber-200/80 rounded flex items-center justify-between">
             <div>
               <div className="font-bold text-amber-900 text-xs">Simulate Guest / Viewer Mode</div>

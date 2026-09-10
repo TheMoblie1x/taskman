@@ -44,6 +44,7 @@ import {
   SharePermission,
   CalendarConnection,
   DocPage,
+  ProjectMember,
 } from '../types';
 
 // Fields persisted on users/{userId} beyond the base profile — everything the Settings
@@ -117,6 +118,8 @@ export const subscribeAllWorkspaceMembers = (onData: (rows: WorkspaceMember[]) =
 
 export const saveWorkspaceMember = (member: WorkspaceMember) =>
   setDoc(doc(requireDb(), 'workspaceMembers', member.id), member);
+
+export const deleteWorkspaceMember = (id: string) => deleteDoc(doc(requireDb(), 'workspaceMembers', id));
 
 /**
  * Deterministic membership doc ID (workspaceId + normalized email) — this is what lets
@@ -217,6 +220,22 @@ export const subscribeAllProjects = (onData: (rows: Project[]) => void, onError?
   subscribeCollection<Project>('projects', [], onData, onError);
 
 export const saveProject = (project: Project) => setDoc(doc(requireDb(), 'projects', project.id), project);
+
+// ---- Project members (per-project email shares) ----
+// Same deterministic-ID idea as membershipDocId: `${projectId}__${email}` so the row for a
+// given person + project can be found (and overwritten) without an indexed query.
+export const projectMemberDocId = (projectId: string, email: string) =>
+  `${projectId}__${email.trim().toLowerCase()}`;
+
+export const subscribeAllProjectMembers = (
+  onData: (rows: ProjectMember[]) => void,
+  onError?: (e: unknown) => void
+) => subscribeCollection<ProjectMember>('projectMembers', [], onData, onError);
+
+export const saveProjectMember = (member: ProjectMember) =>
+  setDoc(doc(requireDb(), 'projectMembers', member.id), member);
+
+export const deleteProjectMember = (id: string) => deleteDoc(doc(requireDb(), 'projectMembers', id));
 
 // ---- Boards ----
 export const subscribeAllBoards = (onData: (rows: Board[]) => void, onError?: (e: unknown) => void) =>

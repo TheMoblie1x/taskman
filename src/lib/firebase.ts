@@ -36,6 +36,12 @@ const app = isFirebaseConfigured ? initializeApp(firebaseConfig) : null;
 export const db = app
   ? initializeFirestore(app, {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      // Optional model fields (Workspace.description, Ticket.dueAt, ...) are `undefined`, not
+      // absent, on the objects we build. Without this, setDoc/updateDoc throw *synchronously*
+      // on the first undefined field — the `.catch()` on those fire-and-forget writes never
+      // sees it, so the throw aborts the caller mid-function (e.g. createWorkspace persisting
+      // the workspace but never reaching its default project/board creation).
+      ignoreUndefinedProperties: true,
     })
   : null;
 
