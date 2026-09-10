@@ -240,7 +240,21 @@ export type DensityMode = 'compact' | 'comfortable' | 'spacious';
 
 export type ThemeMode = 'light' | 'dark' | 'system' | 'high_contrast';
 
-export type PresetThemeName = 'default' | 'midnight' | 'slate' | 'forest' | 'ocean' | 'warm';
+export type PresetThemeName =
+  | 'default'
+  | 'midnight'
+  | 'slate'
+  | 'forest'
+  | 'ocean'
+  | 'warm'
+  // Soft pastel light themes (added alongside the originals) — tinted background/surfaces with
+  // near-black same-hue text so body/secondary text keeps a WCAG-AA (>=4.5:1) contrast ratio.
+  | 'rose'
+  | 'lavender'
+  | 'mint'
+  | 'sky'
+  | 'peach'
+  | 'butter';
 
 export interface CustomColors {
   primary: string;

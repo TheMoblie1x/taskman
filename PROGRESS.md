@@ -577,6 +577,15 @@ project's worth of planning plus derived charts.
 - Kanban/List column strips still scroll horizontally by design; the multi-select action bars
   already had `max-w-[94vw] overflow-x-auto`. Sidebar is already a slide-in drawer under `md`.
 
+**Pastel preset themes — done.** Six soft light themes added to `PRESET_THEMES` /
+`PresetThemeName` (Settings › Appearance › Preset Themes renders them automatically):
+Rosé, Lavender, Mint, Sky, Peach, Butter. Each tints only the page / sidebar / kanban-column
+surfaces and keeps cards pure white; `text` is a near-black tone of the hue and
+`textSecondary` / `primary` were tuned so every critical pair clears WCAG AA — verified with a
+relative-luminance script: text/background ≥ 12.6:1, secondary-text/background ≥ 4.6:1,
+white-on-primary ≥ 4.9:1. No other code changed; `applyThemeTokensToDOM` already handles
+light presets.
+
 ---
 All 6 phases from REQUIREMENTS.md are done, plus real Google Sign-In and the documentation
 portal (both above). Known open items for future work, not tracked as phases here: tightening

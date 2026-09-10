@@ -112,6 +112,108 @@ export const PRESET_THEMES: Record<PresetThemeName, { name: string; mode: 'light
       border: '#E7E5E4',
     },
   },
+
+  // ---- Soft pastel light themes ----
+  // Each keeps cards pure white (max contrast for the dense text on them) and only tints the
+  // page / sidebar / kanban-column surfaces. `text` is a near-black tone of the hue and
+  // `textSecondary` is dark enough to clear 4.5:1 on the tinted background; `primary` (the
+  // button fill) clears 4.5:1 against white text.
+  rose: {
+    name: 'Rosé',
+    mode: 'light',
+    colors: {
+      primary: '#BE185D',
+      secondary: '#8A5673',
+      accent: '#C81E67',
+      background: '#FDF2F8',
+      sidebar: '#FBE8F1',
+      card: '#FFFFFF',
+      header: '#FFFFFF',
+      text: '#3B0A22',
+      textSecondary: '#8A5673',
+      border: '#F6D3E4',
+    },
+  },
+  lavender: {
+    name: 'Lavender',
+    mode: 'light',
+    colors: {
+      primary: '#6D28D9',
+      secondary: '#6D5B9E',
+      accent: '#7C3AED',
+      background: '#F5F3FF',
+      sidebar: '#EDE9FE',
+      card: '#FFFFFF',
+      header: '#FFFFFF',
+      text: '#2E1065',
+      textSecondary: '#6D5B9E',
+      border: '#DDD6FE',
+    },
+  },
+  mint: {
+    name: 'Mint',
+    mode: 'light',
+    colors: {
+      primary: '#047857',
+      secondary: '#356B4C',
+      accent: '#0F766E',
+      background: '#F0FDF4',
+      sidebar: '#DCFCE7',
+      card: '#FFFFFF',
+      header: '#FFFFFF',
+      text: '#052E1B',
+      textSecondary: '#356B4C',
+      border: '#BBF7D0',
+    },
+  },
+  sky: {
+    name: 'Sky',
+    mode: 'light',
+    colors: {
+      primary: '#1D4ED8',
+      secondary: '#356293',
+      accent: '#2563EB',
+      background: '#EFF6FF',
+      sidebar: '#DBEAFE',
+      card: '#FFFFFF',
+      header: '#FFFFFF',
+      text: '#0B2E52',
+      textSecondary: '#356293',
+      border: '#BFDBFE',
+    },
+  },
+  peach: {
+    name: 'Peach',
+    mode: 'light',
+    colors: {
+      primary: '#C2410C',
+      secondary: '#8A5A3C',
+      accent: '#C2410C',
+      background: '#FFF7ED',
+      sidebar: '#FFEDD5',
+      card: '#FFFFFF',
+      header: '#FFFFFF',
+      text: '#3B1706',
+      textSecondary: '#8A5A3C',
+      border: '#FED7AA',
+    },
+  },
+  butter: {
+    name: 'Butter',
+    mode: 'light',
+    colors: {
+      primary: '#A16207',
+      secondary: '#7A5E1E',
+      accent: '#B45309',
+      background: '#FEFCE8',
+      sidebar: '#FEF9C3',
+      card: '#FFFFFF',
+      header: '#FFFFFF',
+      text: '#3F2D08',
+      textSecondary: '#7A5E1E',
+      border: '#FDE68A',
+    },
+  },
 };
 
 export const HIGH_CONTRAST_COLORS: CustomColors = {
