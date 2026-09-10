@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { BoardColumn, Ticket } from '../types';
 import { TicketCard } from './TicketCard';
 import { PoweredByMobile1x } from './PoweredByMobile1x';
+import { BoardPresence } from './BoardPresence';
 import { GoogleIcon } from './GoogleIcon';
 
 interface KanbanBoardProps {
@@ -40,6 +41,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     userCanEdit,
     activeView,
     setActiveView,
+    boardAccessMembers,
+    boardViewers,
   } = useApp();
 
   const [activeDropColumn, setActiveDropColumn] = useState<string | null>(null);
@@ -240,6 +243,13 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         <div className="flex items-center gap-2">
           {/* Powered by mobile1x badge */}
           <PoweredByMobile1x variant="badge" className="hidden lg:inline-flex" />
+
+          {/* Who has access + who's viewing right now */}
+          <BoardPresence
+            accessMembers={boardAccessMembers}
+            viewers={boardViewers}
+            onManageAccess={onOpenShareModal}
+          />
 
           {/* Share Board Button */}
           <button

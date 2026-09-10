@@ -491,6 +491,28 @@ console paste on every change.
 `FIREBASE_TOKEN` (from `firebase login:ci`) has been added to Netlify > Site settings >
 Environment variables, so the next deploy publishes the rules for real.
 
+**Board access count + live-viewer signal — done.** The Kanban toolbar (next to "Share Board")
+now shows a stacked-avatar count of everyone who can open the board and, when anyone else is
+looking at it, a pulsing "N here".
+
+- `types.ts`: `PresenceEntry` (deterministic id `${boardId}__${userId}`, ISO `lastSeen`).
+- `firestoreRepository.ts`: `presence` collection — `presenceDocId`, `subscribeWorkspacePresence`
+  (scoped by `workspaceId` like tickets/goals), `savePresence`, `deletePresence`.
+- `AppContext.tsx`: `presence` state + workspace-scoped subscription; a heartbeat effect that
+  writes one row every 30s while the user has a board open and the tab is visible and removes
+  it on unmount / `beforeunload`; derived `boardAccessMembers` (non-guest workspace members +
+  this project's per-project shares, deduped by email) and `boardViewers` (fresh heartbeats
+  for the active board, excluding self, re-evaluated on a 30s clock so absent viewers drop
+  off). Constants `PRESENCE_HEARTBEAT_MS` / `PRESENCE_STALE_MS` (30s / 90s).
+- `BoardPresence.tsx` (new): the avatar cluster (click → Share modal) + the emerald pulse.
+- `firestore.rules`: `presence` block — read for workspace members, write/delete only your own
+  row (`user.id == request.auth.uid`).
+- Known limitation: presence rows orphaned by a hard crash (no unload event) stay in the
+  collection; they are filtered out client-side after 90s but not garbage-collected.
+
+Local (no-Firebase) mode: the access count still renders from seeded members; live viewers are
+always empty since there is no shared backend.
+
 ---
 All 6 phases from REQUIREMENTS.md are done, plus real Google Sign-In and the documentation
 portal (both above). Known open items for future work, not tracked as phases here: tightening

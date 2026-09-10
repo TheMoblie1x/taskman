@@ -74,6 +74,16 @@ service cloud.firestore {
       allow create: if isWorkspaceMember(request.resource.data.workspaceId);
     }
 
+    // Board presence ("who is viewing right now"): any member of the workspace can see the
+    // heartbeats, but a member may only write/remove their own row (doc's user.id must be
+    // their uid). Stale rows age out client-side; a client also deletes its own on unload.
+    match /presence/{entryId} {
+      allow read: if isWorkspaceMember(resource.data.workspaceId);
+      allow create, update: if isWorkspaceMember(request.resource.data.workspaceId)
+        && request.resource.data.user.id == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.user.id == request.auth.uid;
+    }
+
     // Boards: signed-in members keep the existing "any signed-in user" access via the
     // catch-all below; a share-link guest additionally gets read-only access to the exact
     // board their link points to (to render its name/columns), never write.

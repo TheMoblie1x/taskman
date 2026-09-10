@@ -45,6 +45,7 @@ import {
   CalendarConnection,
   DocPage,
   ProjectMember,
+  PresenceEntry,
 } from '../types';
 
 // Fields persisted on users/{userId} beyond the base profile — everything the Settings
@@ -272,6 +273,22 @@ export async function getBoardById(boardId: string): Promise<Board | null> {
   const snap = await getDoc(doc(requireDb(), 'boards', boardId));
   return snap.exists() ? ({ id: snap.id, ...(snap.data() as DocumentData) } as Board) : null;
 }
+
+// ---- Presence ("who's viewing this board right now") ----
+// Deterministic ID so a viewer keeps overwriting their own single heartbeat row rather than
+// piling up new docs. Scoped-subscribed by workspaceId like tickets/goals.
+export const presenceDocId = (boardId: string, userId: string) => `${boardId}__${userId}`;
+
+export const subscribeWorkspacePresence = (
+  workspaceId: string,
+  onData: (rows: PresenceEntry[]) => void,
+  onError?: (e: unknown) => void
+) => subscribeCollection<PresenceEntry>('presence', [where('workspaceId', '==', workspaceId)], onData, onError);
+
+export const savePresence = (entry: PresenceEntry) =>
+  setDoc(doc(requireDb(), 'presence', entry.id), entry);
+
+export const deletePresence = (id: string) => deleteDoc(doc(requireDb(), 'presence', id));
 
 // ---- Tickets ----
 export const subscribeWorkspaceTickets = (

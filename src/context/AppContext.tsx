@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   User,
   Workspace,
   WorkspaceMember,
   Project,
   ProjectMember,
+  PresenceEntry,
   ShareAccess,
   Board,
   BoardColumn,
@@ -111,6 +112,10 @@ interface AppContextType {
   boards: Board[];
   workspaceBoards: Board[];
   activeBoard: Board | null;
+  // Everyone who can open the active board (non-guest workspace members + this project's
+  // per-project shares, deduped) and who is looking at it right now (live heartbeats).
+  boardAccessMembers: User[];
+  boardViewers: User[];
   addColumn: (name: string, status: string, wipLimit?: number | null) => void;
   updateColumn: (columnId: string, updates: Partial<BoardColumn>) => void;
   deleteColumn: (columnId: string) => void;
@@ -258,6 +263,11 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'kanban_collaborative_platform_v1';
 
+// A board-presence heartbeat is written every 30s; treat a row as a live viewer only while it
+// is younger than this, so tabs that crashed or closed without cleanup age out on their own.
+const PRESENCE_HEARTBEAT_MS = 30_000;
+const PRESENCE_STALE_MS = 90_000;
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Load saved state or default
   const [initialized, setInitialized] = useState(false);
@@ -292,6 +302,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeProjectId, setActiveProjectId] = useState<string>('');
 
   const [boards, setBoards] = useState<Board[]>([]);
+  const [presence, setPresence] = useState<PresenceEntry[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [docPages, setDocPages] = useState<DocPage[]>([]);
@@ -733,6 +744,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubGoals = repo.subscribeWorkspaceGoals(activeWorkspaceId, setGoals);
     const unsubDocPages = repo.subscribeWorkspaceDocPages(activeWorkspaceId, setDocPages);
     const unsubNotifications = repo.subscribeWorkspaceNotifications(activeWorkspaceId, setNotifications);
+    const unsubPresence = repo.subscribeWorkspacePresence(activeWorkspaceId, setPresence);
 
     return () => {
       unsubMembers();
@@ -740,6 +752,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubGoals();
       unsubDocPages();
       unsubNotifications();
+      unsubPresence();
     };
   }, [activeWorkspaceId, authUser?.uid]);
 
@@ -818,6 +831,87 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Edit rights follow the active project's effective access, so a guest shared as "editor" on
   // one project can edit it, and a member shared as "viewer" is held to read-only there.
   const userCanEdit = !isGuestViewer && getProjectAccess(activeProject?.id) === 'editor';
+
+  // ---- Active board: who can open it, and who is looking at it right now ----
+  // "Has access" = non-guest workspace members (they see every project) plus this project's
+  // per-project email shares, deduped by email.
+  const boardAccessMembers = useMemo<User[]>(() => {
+    const byEmail = new Map<string, User>();
+    workspaceMembersScoped.forEach((m) => {
+      if (m.role !== 'guest') byEmail.set(m.user.email.toLowerCase(), m.user);
+    });
+    if (activeProject) {
+      workspaceProjectMembers
+        .filter((pm) => pm.projectId === activeProject.id)
+        .forEach((pm) => byEmail.set(pm.user.email.toLowerCase(), pm.user));
+    }
+    return [...byEmail.values()];
+  }, [workspaceMembersScoped, workspaceProjectMembers, activeProject?.id]);
+
+  // Bumped on a timer so viewers whose heartbeat went stale drop off without waiting for the
+  // next Firestore snapshot.
+  const [presenceClock, setPresenceClock] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setPresenceClock(Date.now()), PRESENCE_HEARTBEAT_MS);
+    return () => clearInterval(t);
+  }, []);
+
+  const boardViewers = useMemo<User[]>(() => {
+    if (!activeBoard) return [];
+    const seen = new Set<string>();
+    const out: User[] = [];
+    for (const p of presence) {
+      if (p.boardId !== activeBoard.id || p.user.id === currentUser.id) continue;
+      if (presenceClock - new Date(p.lastSeen).getTime() >= PRESENCE_STALE_MS) continue;
+      if (seen.has(p.user.id)) continue;
+      seen.add(p.user.id);
+      out.push(p.user);
+    }
+    return out;
+  }, [presence, activeBoard?.id, currentUser.id, presenceClock]);
+
+  // Heartbeat: keep one fresh presence row while this signed-in user has a board open and the
+  // tab is visible; remove it on unmount / tab close so others stop seeing us promptly.
+  useEffect(() => {
+    if (!isFirebaseConfigured || isGuestViewer) return;
+    if (!activeBoard || !activeProject || !currentUser.id || !activeWorkspace.id) return;
+
+    const id = repo.presenceDocId(activeBoard.id, currentUser.id);
+    const beat = () => {
+      if (document.visibilityState !== 'visible') return;
+      repo
+        .savePresence({
+          id,
+          boardId: activeBoard.id,
+          projectId: activeProject.id,
+          workspaceId: activeWorkspace.id,
+          user: currentUser,
+          lastSeen: new Date().toISOString(),
+        })
+        .catch((e) => console.error('savePresence failed:', e));
+    };
+    const drop = () => repo.deletePresence(id).catch(() => {});
+
+    beat();
+    const interval = setInterval(beat, PRESENCE_HEARTBEAT_MS);
+    document.addEventListener('visibilitychange', beat);
+    window.addEventListener('beforeunload', drop);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', beat);
+      window.removeEventListener('beforeunload', drop);
+      drop();
+    };
+  }, [
+    isGuestViewer,
+    activeBoard?.id,
+    activeProject?.id,
+    activeWorkspace.id,
+    currentUser.id,
+    currentUser.name,
+    currentUser.avatarUrl,
+  ]);
   // isAnonymous excludes leftover anonymous sessions from before real auth existed (Phase 6
   // used anonymous sign-in; anyone who tested it has that session cached in their browser) —
   // those have no email, so Firestore rules already reject them, but the login gate should
@@ -1991,6 +2085,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         boards,
         workspaceBoards,
         activeBoard,
+        boardAccessMembers,
+        boardViewers,
         addColumn,
         updateColumn,
         deleteColumn,

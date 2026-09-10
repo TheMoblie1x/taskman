@@ -58,6 +58,18 @@ export interface ProjectMember {
   joinedAt: string;
 }
 
+// One "currently viewing this board" heartbeat. Written every ~30s by each signed-in viewer
+// while their tab is visible and removed on unload; a row is treated as live only while its
+// `lastSeen` is within PRESENCE_STALE_MS (see AppContext), so crashed/closed tabs age out.
+export interface PresenceEntry {
+  id: string; // deterministic: `${boardId}__${userId}`
+  boardId: string;
+  projectId: string;
+  workspaceId: string;
+  user: User;
+  lastSeen: string; // ISO
+}
+
 export interface BoardColumn {
   id: string;
   boardId: string;
