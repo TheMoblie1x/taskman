@@ -67,7 +67,7 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-3 bg-slate-900/40 backdrop-blur-2xs">
-      <div className="bg-white rounded-lg shadow-xl border border-slate-200 max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      <div className="bg-white rounded-lg shadow-xl border border-slate-200 max-w-lg w-full overflow-hidden flex flex-col max-h-[calc(100dvh-1.5rem)] animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="px-4 py-2.5 border-b border-slate-200 flex items-center justify-between bg-slate-50/60">
           <div className="flex items-center gap-2">
@@ -85,7 +85,7 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-4 space-y-3 text-xs">
+        <form onSubmit={handleSubmit} className="p-4 space-y-3 text-xs flex-1 min-h-0 overflow-y-auto">
           {/* Project & Type */}
           <div className="grid grid-cols-2 gap-2.5">
             <div>

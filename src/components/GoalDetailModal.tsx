@@ -87,7 +87,7 @@ export const GoalDetailModal: React.FC<GoalDetailModalProps> = ({ goalId, onClos
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-2xs">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-xl w-full overflow-hidden flex flex-col max-h-[calc(100dvh-2rem)] animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="px-5 py-3.5 border-b border-slate-200 flex items-start justify-between gap-2 bg-slate-50/70">
           <div className="min-w-0">
@@ -102,7 +102,7 @@ export const GoalDetailModal: React.FC<GoalDetailModalProps> = ({ goalId, onClos
           </button>
         </div>
 
-        <div className="p-5 text-xs space-y-5 max-h-[75vh] overflow-y-auto">
+        <div className="p-5 text-xs space-y-5 flex-1 min-h-0 overflow-y-auto">
           {/* Progress */}
           <div>
             <div className="flex items-center justify-between mb-1.5">

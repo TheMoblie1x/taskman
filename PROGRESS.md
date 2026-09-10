@@ -557,6 +557,26 @@ project's worth of planning plus derived charts.
 - Story points were already editable (CreateTicketModal + TicketDrawer); the sprint view just
   consumes them.
 
+**Phone responsiveness pass — done.** Whole-site sweep at ~380px width.
+
+- `App.tsx`: `overflow-x-hidden` on the root as a safety net.
+- `TopNavbar.tsx`: density toggle `hidden sm:flex`, "Create" label `hidden sm:inline` (icon
+  stays) — the right-side icon cluster no longer overflows the 44px bar.
+- `ListView.tsx`: table `min-w-[820px]` so its 8 columns scroll horizontally inside the
+  existing `overflow-auto` wrapper instead of crushing.
+- `DocsView.tsx`: single-pane on phones — the page list is full-width until a page is picked,
+  then the editor takes over with a back arrow (`md:hidden`); two-pane returns at `md`.
+  Editor paddings `p-6` → `p-4 sm:p-6`.
+- `SettingsModal.tsx`: `p-6`/`px-6` → `p-4 sm:p-6`; theme grid `grid-cols-4` and custom-color
+  grid `grid-cols-3` → `grid-cols-2 sm:grid-cols-*`.
+- Every modal (Create Ticket / Project / Goal, Share, Settings, Goal Detail): box is now
+  `flex flex-col max-h-[calc(100dvh-*rem)]` with the body/form as a `flex-1 min-h-0
+  overflow-y-auto` scroll region, so a tall modal on a short screen scrolls internally and
+  the footer/submit stays reachable.
+- `SprintView.tsx`: new-sprint date inputs `flex-col sm:flex-row`.
+- Kanban/List column strips still scroll horizontally by design; the multi-select action bars
+  already had `max-w-[94vw] overflow-x-auto`. Sidebar is already a slide-in drawer under `md`.
+
 ---
 All 6 phases from REQUIREMENTS.md are done, plus real Google Sign-In and the documentation
 portal (both above). Known open items for future work, not tracked as phases here: tightening

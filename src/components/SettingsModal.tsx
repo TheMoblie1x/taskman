@@ -140,7 +140,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-2xs">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-xl w-full overflow-hidden flex flex-col max-h-[calc(100dvh-2rem)] animate-in fade-in zoom-in-95 duration-150">
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold">
@@ -157,7 +157,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-slate-200 bg-slate-50/50 px-6 gap-5 text-xs overflow-x-auto">
+        <div className="flex border-b border-slate-200 bg-slate-50/50 px-4 sm:px-6 gap-4 sm:gap-5 text-xs overflow-x-auto">
           {TABS.map((tab) => (
             <button
               key={tab.id}
@@ -174,13 +174,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           ))}
         </div>
 
-        <div className="p-6 text-xs space-y-6 max-h-[75vh] overflow-y-auto">
+        <div className="p-4 sm:p-6 text-xs space-y-6 flex-1 min-h-0 overflow-y-auto">
           {activeTab === 'appearance' && (
             <div className="space-y-5">
               {/* Theme Mode */}
               <div>
                 <h4 className="text-sm font-bold text-slate-800 mb-2">Theme</h4>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {THEME_MODE_OPTIONS.map((opt) => (
                     <button
                       key={opt.value}
@@ -235,7 +235,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               <div>
                 <h4 className="text-sm font-bold text-slate-800 mb-0.5">Custom Colors</h4>
                 <p className="text-[10px] text-slate-400 mb-2">Overrides the selected preset. Applies globally.</p>
-                <div className="grid grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                   {CUSTOM_COLOR_FIELDS.map((field) => (
                     <label key={field.key} className="flex items-center gap-1.5 p-1.5 rounded-lg border border-slate-200 cursor-pointer hover:border-slate-300">
                       <input

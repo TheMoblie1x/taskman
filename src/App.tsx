@@ -75,7 +75,7 @@ const AppContent: React.FC = () => {
   }, [setActiveView]);
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900 overflow-x-hidden">
       {/* Top Navbar */}
       <TopNavbar
         onOpenCreateTicket={() => {

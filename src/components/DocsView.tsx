@@ -55,8 +55,12 @@ export const DocsView: React.FC = () => {
 
   return (
     <div className="flex-1 flex h-[calc(100vh-2.75rem)] overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors">
-      {/* Page list */}
-      <div className="w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col">
+      {/* Page list — full width on phones until a page is picked, then the editor takes over */}
+      <div
+        className={`${
+          selected ? 'hidden md:flex' : 'flex'
+        } w-full md:w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex-col`}
+      >
         <div className="p-3 border-b border-slate-200 dark:border-slate-800 space-y-2">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">Docs</h2>
@@ -103,7 +107,7 @@ export const DocsView: React.FC = () => {
       </div>
 
       {/* Page content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className={`${selected ? 'flex' : 'hidden md:flex'} flex-1 flex-col overflow-hidden`}>
         {!selected ? (
           <div className="flex-1 flex items-center justify-center text-center px-6">
             <div>
@@ -113,7 +117,14 @@ export const DocsView: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="px-6 py-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-3">
+            <div className="px-4 sm:px-6 py-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-2">
+              <button
+                onClick={() => setSelectedId(null)}
+                className="md:hidden p-1 -ml-1 text-slate-400 hover:text-slate-700 shrink-0"
+                title="Back to page list"
+              >
+                <GoogleIcon name="arrow_back" size={18} />
+              </button>
               <input
                 value={titleDraft}
                 onChange={(e) => setTitleDraft(e.target.value)}
@@ -148,7 +159,7 @@ export const DocsView: React.FC = () => {
               </div>
             </div>
 
-            <div className="px-6 py-1.5 border-b border-slate-100 dark:border-slate-800/60 text-[10px] text-slate-400 flex items-center gap-1.5">
+            <div className="px-4 sm:px-6 py-1.5 border-b border-slate-100 dark:border-slate-800/60 text-[10px] text-slate-400 flex items-center gap-1.5">
               <GoogleIcon name="history" size={11} />
               Updated {new Date(selected.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
               {selected.projectId && workspaceProjects.find((p) => p.id === selected.projectId) && (
@@ -166,11 +177,11 @@ export const DocsView: React.FC = () => {
                   onChange={(e) => setContentDraft(e.target.value)}
                   onBlur={handleSaveContent}
                   placeholder="Write in Markdown — headers, **bold**, lists, `code`, links..."
-                  className="w-full h-full min-h-[60vh] p-6 text-xs font-mono leading-relaxed bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none resize-none"
+                  className="w-full h-full min-h-[60vh] p-4 sm:p-6 text-xs font-mono leading-relaxed bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none resize-none"
                 />
               ) : (
                 <div
-                  className="prose-docs max-w-3xl mx-auto p-6 text-xs leading-relaxed text-slate-700 dark:text-slate-300"
+                  className="prose-docs max-w-3xl mx-auto p-4 sm:p-6 text-xs leading-relaxed text-slate-700 dark:text-slate-300"
                   dangerouslySetInnerHTML={{ __html: renderMarkdown(selected.content) }}
                 />
               )}

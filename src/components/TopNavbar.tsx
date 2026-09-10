@@ -237,7 +237,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
           className="flex items-center gap-1 px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-2xs transition-colors"
         >
           <GoogleIcon name="add" size={14} />
-          <span>Create</span>
+          <span className="hidden sm:inline">Create</span>
           <kbd className="hidden lg:inline-block ml-0.5 px-1 py-0.2 text-[9px] font-mono bg-blue-500/80 rounded">
             C
           </kbd>
@@ -312,11 +312,11 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
           )}
         </div>
 
-        {/* Density Quick Toggle */}
+        {/* Density Quick Toggle — hidden on phones (also in Settings); keeps the bar from crowding */}
         <button
           id="navbar-density-toggle-btn"
           onClick={() => setDensity(density === 'compact' ? 'comfortable' : 'compact')}
-          className="p-1.5 text-slate-600 hover:bg-slate-100 rounded transition-colors flex items-center gap-1"
+          className="p-1.5 text-slate-600 hover:bg-slate-100 rounded transition-colors hidden sm:flex items-center gap-1"
           title={`Density Mode: ${density}. Click to switch to ${density === 'compact' ? 'comfortable' : 'compact'}`}
         >
           {density === 'compact' ? (

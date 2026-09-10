@@ -295,7 +295,7 @@ export const SprintView: React.FC = () => {
               placeholder="Sprint goal (optional)"
               className="w-full border border-slate-200 dark:border-slate-700 dark:bg-slate-800 rounded p-1.5 text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
             />
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <label className="flex-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 Start
                 <input

@@ -100,7 +100,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-3 bg-slate-900/40 backdrop-blur-2xs">
-      <div className="bg-white rounded-lg shadow-xl border border-slate-200 max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      <div className="bg-white rounded-lg shadow-xl border border-slate-200 max-w-lg w-full overflow-hidden flex flex-col max-h-[calc(100dvh-1.5rem)] animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="px-4 py-2.5 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
           <div className="flex items-center gap-2">
@@ -117,7 +117,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        <div className="p-4 space-y-4 text-xs">
+        <div className="p-4 space-y-4 text-xs flex-1 min-h-0 overflow-y-auto">
           {/* Scope toggle */}
           <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-md">
             {scopeTab('project', activeProject ? `Project · ${activeProject.name}` : 'This project', !activeProject)}

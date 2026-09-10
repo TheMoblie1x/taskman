@@ -93,7 +93,8 @@ export const ListView: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-auto relative">
-        <table className="w-full text-left border-collapse text-xs">
+        {/* min-w keeps the 8 columns readable on narrow screens — the wrapper scrolls x. */}
+        <table className="w-full min-w-[820px] text-left border-collapse text-xs">
           <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-10 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider text-[9px]">
             <tr>
               <th className={`w-8 ${isComfortable ? 'py-2 px-2.5' : 'py-1 px-2'}`}>
