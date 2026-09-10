@@ -179,6 +179,39 @@ export async function claimPendingInvites(email: string, realUser: User): Promis
   return snap.size;
 }
 
+/**
+ * Also run right after a real sign-in, just after claimPendingInvites. firestore.rules gates
+ * every tickets/goals/docPages/notifications read and write on isWorkspaceMember() — a user
+ * who was never in the seed's member list and holds no pending invite would otherwise have
+ * all of it silently denied (writes rejected, subscriptions failing with permission-denied),
+ * so their tickets never persist. A no-op once the user already belongs to any workspace;
+ * otherwise it joins them to `defaultWorkspaceId` as an active member.
+ */
+export async function ensureWorkspaceMembership(
+  email: string,
+  realUser: User,
+  defaultWorkspaceId: string
+): Promise<boolean> {
+  const database = requireDb();
+  const normalizedEmail = email.trim().toLowerCase();
+  const existing = await getDocs(
+    query(collection(database, 'workspaceMembers'), where('user.email', '==', normalizedEmail))
+  );
+  if (!existing.empty) return false;
+
+  const id = membershipDocId(defaultWorkspaceId, normalizedEmail);
+  const member: WorkspaceMember = {
+    id,
+    workspaceId: defaultWorkspaceId,
+    user: realUser,
+    role: 'member',
+    status: 'active',
+    joinedAt: new Date().toISOString(),
+  };
+  await setDoc(doc(database, 'workspaceMembers', id), member);
+  return true;
+}
+
 // ---- Projects ----
 export const subscribeAllProjects = (onData: (rows: Project[]) => void, onError?: (e: unknown) => void) =>
   subscribeCollection<Project>('projects', [], onData, onError);
