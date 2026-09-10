@@ -1,5 +1,11 @@
 [build]
-  command = "npm run build"
+  # `deploy:rules` publishes firestore.rules to the "taskman-1c28f" Firebase project so the
+  # live rules track this repo instead of needing a manual paste in the Firebase console on
+  # every change. It is a no-op unless a credential is present in the build environment: set
+  # FIREBASE_TOKEN (from `firebase login:ci`) — or GOOGLE_APPLICATION_CREDENTIALS pointing at
+  # a service-account key — in Netlify > Site settings > Environment variables. Without one it
+  # just logs a skip line and the build still succeeds.
+  command = "npm run build && npm run deploy:rules"
   publish = "dist"
 
 [build.environment]
