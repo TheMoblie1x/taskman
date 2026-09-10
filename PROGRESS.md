@@ -513,6 +513,21 @@ looking at it, a pulsing "N here".
 Local (no-Firebase) mode: the access count still renders from seeded members; live viewers are
 always empty since there is no shared backend.
 
+**Share-link guest task detail view — done.** `ShareGuestApp` was cards-only, so a guest
+clicking a task got nothing (no detail view existed). Added a read-only slide-over drawer
+(open on card click, close on overlay click / Escape) rendering the full ticket —
+description, labels, start/due/estimate/story points, subtasks, checklist, comments (author
+name+avatar are denormalised on the ticket doc), attachments. Everything comes from the
+`subscribeBoardTickets` stream the guest already has, so no new reads or `firestore.rules`
+changes.
+
+**Ticket status color coding — done.** `utils/statusColor.ts` maps a column's `status` key
+(and name) to `{ dot, pill }` Tailwind classes — seeded keys
+(BACKLOG/TO_DO/IN_PROGRESS/REVIEW/DONE/BLOCKED) plus keyword matching for custom columns,
+neutral slate fallback. Applied in the guest cards + guest drawer, `ListView` (dot beside the
+status select), `MyTasksView` (status pill), and `TicketDrawer` (pill beside the Status
+label). Kanban `TicketCard` deliberately skipped — a card there already sits under its column.
+
 ---
 All 6 phases from REQUIREMENTS.md are done, plus real Google Sign-In and the documentation
 portal (both above). Known open items for future work, not tracked as phases here: tightening
