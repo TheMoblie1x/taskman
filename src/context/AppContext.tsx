@@ -578,6 +578,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (claimed > 0) {
               console.log(`Claimed ${claimed} pending workspace invite(s) for ${user.email}.`);
             }
+            // Without this, a signed-in user who isn't in the seed's member list and has no
+            // pending invite belongs to no workspace, so firestore.rules denies every
+            // ticket/goal/doc read and write — their data never persists past the session.
+            const joined = await repo.ensureWorkspaceMembership(user.email, profile, INITIAL_WORKSPACES[0].id);
+            if (joined) {
+              console.log(`Added ${user.email} to the default workspace.`);
+            }
           }
         } catch (e) {
           console.error('Post-sign-in profile/invite setup failed:', e);
