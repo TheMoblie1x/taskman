@@ -452,7 +452,44 @@ get a quick manual pass by the user.)
 
 **Still needed from the user:** the updated `firestore.rules` above (with the new `docPages`
 block) has NOT been published yet — republish it in Console > Firestore Database > Rules, the
-same way the Auth-only version was published earlier.
+same way the Auth-only version was published earlier. (Superseded — see "Auto-publish
+firestore.rules from Netlify" below.)
+
+**Share by email — workspace and per-project — done.** The Share modal's role-based
+`inviteMember` flow is replaced with two-scope email sharing at "Can edit" / "View only".
+
+- `types.ts`: `ShareAccess`; `ProjectMember` (deterministic id `${projectId}__${email}`) as a
+  per-project access override, independent of `WorkspaceMember`.
+- `AppContext.tsx`: `shareWorkspace` / `shareProject` plus update/remove for each;
+  `getProjectAccess()` — an explicit per-project share wins, else the workspace role. Guests
+  now see only the projects shared with them by email; `userCanEdit` follows the active
+  project's effective access. Placeholder users for not-yet-signed-up invitees are reconciled
+  on sign-in by `claimPendingProjectShares` (the per-project counterpart of
+  `claimPendingInvites`), run in the same post-sign-in step.
+- `firestoreRepository.ts`: `projectMembers` collection (subscribe/save/delete,
+  `projectMemberDocId`); `deleteWorkspaceMember`; `claimPendingProjectShares`.
+- `ShareModal.tsx`: scope toggle, email invite with access dropdown, "People with access" list
+  with inline access change + removal.
+- `firebase.ts`: `ignoreUndefinedProperties` on Firestore init — undefined optional fields
+  were throwing synchronously and aborting the caller mid-function.
+- `firestore.rules`: unchanged — the `match /{document=**}` catch-all already covers
+  `projectMembers` for signed-in users, consistent with `workspaceMembers` / `projects`.
+
+Verified: `npm run lint` + `npm run build` clean. Live click-through not done this session.
+
+**Auto-publish `firestore.rules` from Netlify — done.** The live rules no longer need a manual
+console paste on every change.
+
+- `firebase.json` / `.firebaserc`: point the Firebase CLI at `firestore.rules` for project
+  `taskman-1c28f`.
+- `package.json`: `deploy:rules` — `npx -y firebase-tools@15 deploy --only firestore:rules`,
+  guarded so it is a no-op (logs a skip line, exit 0) unless `FIREBASE_TOKEN` or
+  `GOOGLE_APPLICATION_CREDENTIALS` is in the env.
+- `netlify.toml`: build command is now `npm run build && npm run deploy:rules`, so a push that
+  deploys the site also publishes the rules.
+
+`FIREBASE_TOKEN` (from `firebase login:ci`) has been added to Netlify > Site settings >
+Environment variables, so the next deploy publishes the rules for real.
 
 ---
 All 6 phases from REQUIREMENTS.md are done, plus real Google Sign-In and the documentation
