@@ -183,6 +183,29 @@ export async function claimPendingInvites(email: string, realUser: User): Promis
 }
 
 /**
+ * The per-project counterpart of claimPendingInvites, run in the same post-sign-in step:
+ * a `shareProject` for someone who has never signed in leaves a projectMembers doc with a
+ * placeholder `user` and status 'invited' (the row's ID is email-based, so access already
+ * resolves by email — this just swaps in the real uid/name/avatar and marks it active).
+ */
+export async function claimPendingProjectShares(email: string, realUser: User): Promise<number> {
+  const database = requireDb();
+  const q = query(
+    collection(database, 'projectMembers'),
+    where('user.email', '==', email.trim().toLowerCase()),
+    where('status', '==', 'invited')
+  );
+  const snap = await getDocs(q);
+  if (snap.empty) return 0;
+  const batch = writeBatch(database);
+  snap.docs.forEach((d) => {
+    batch.update(d.ref, { status: 'active', user: realUser });
+  });
+  await batch.commit();
+  return snap.size;
+}
+
+/**
  * Also run right after a real sign-in, just after claimPendingInvites. firestore.rules gates
  * every tickets/goals/docPages/notifications read and write on isWorkspaceMember() — a user
  * who was never in the seed's member list and holds no pending invite would otherwise have

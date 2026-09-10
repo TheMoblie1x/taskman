@@ -593,6 +593,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (claimed > 0) {
               console.log(`Claimed ${claimed} pending workspace invite(s) for ${user.email}.`);
             }
+            const claimedProjects = await repo.claimPendingProjectShares(user.email, profile);
+            if (claimedProjects > 0) {
+              console.log(`Claimed ${claimedProjects} pending project share(s) for ${user.email}.`);
+            }
             // Without this, a signed-in user who isn't in the seed's member list and has no
             // pending invite belongs to no workspace, so firestore.rules denies every
             // ticket/goal/doc read and write — their data never persists past the session.
@@ -963,7 +967,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const accessToRole = (access: ShareAccess): WorkspaceRole => (access === 'editor' ? 'member' : 'guest');
 
   // Find the User for an email, creating (and persisting) a lightweight placeholder profile if
-  // that person has never signed in — claimPendingInvites swaps in their real profile later.
+  // that person has never signed in — claimPendingInvites / claimPendingProjectShares swap in
+  // their real profile once they do.
   const resolveInvitee = useCallback(
     (normalizedEmail: string): { user: User; isExisting: boolean } => {
       const existing = allUsers.find((u) => u.email.toLowerCase() === normalizedEmail);
