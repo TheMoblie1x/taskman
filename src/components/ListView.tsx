@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../context/AppContext';
 import { Ticket, TicketPriority } from '../types';
 import { TicketTypeBadge, PriorityBadge } from './TicketBadge';
+import { statusColor } from '../utils/statusColor';
 import { GoogleIcon } from './GoogleIcon';
 
 export const ListView: React.FC = () => {
@@ -205,18 +206,25 @@ export const ListView: React.FC = () => {
                       </div>
                     </td>
                     <td className={cellPad}>
-                      <select
-                        value={t.status}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => moveTicket(t.id, e.target.value)}
-                        className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 font-medium text-slate-700 dark:text-slate-200 focus:ring-1 focus:ring-blue-500"
-                      >
-                        {columns.map((col) => (
-                          <option key={col.id} value={col.status}>
-                            {col.name}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`w-2 h-2 rounded-full shrink-0 ${
+                            statusColor(t.status, columns.find((c) => c.status === t.status)?.name).dot
+                          }`}
+                        />
+                        <select
+                          value={t.status}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => moveTicket(t.id, e.target.value)}
+                          className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 font-medium text-slate-700 dark:text-slate-200 focus:ring-1 focus:ring-blue-500"
+                        >
+                          {columns.map((col) => (
+                            <option key={col.id} value={col.status}>
+                              {col.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </td>
                     <td className={cellPad}>
                       <PriorityBadge priority={t.priority} />

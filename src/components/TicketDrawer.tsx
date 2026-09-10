@@ -7,6 +7,7 @@ import {
   generateOutlookCalendarUrl,
   downloadICSFile,
 } from '../utils/calendar';
+import { statusColor } from '../utils/statusColor';
 import { GoogleIcon } from './GoogleIcon';
 
 export const TicketDrawer: React.FC = () => {
@@ -579,9 +580,24 @@ export const TicketDrawer: React.FC = () => {
           <div className="w-full md:w-64 bg-slate-50/70 dark:bg-slate-850/80 border-t md:border-t-0 md:border-l border-slate-200 dark:border-slate-800 p-3.5 space-y-3 shrink-0 text-xs">
             {/* Status */}
             <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-                Status
-              </label>
+              <div className="flex items-center justify-between mb-0.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Status
+                </label>
+                {(() => {
+                  const name =
+                    columns.find((c) => c.status === selectedTicket.status)?.name ?? selectedTicket.status;
+                  const c = statusColor(selectedTicket.status, name);
+                  return (
+                    <span
+                      className={`text-[9px] font-bold px-1.5 py-0.2 rounded inline-flex items-center gap-1 ${c.pill}`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+                      {name}
+                    </span>
+                  );
+                })()}
+              </div>
               <select
                 value={selectedTicket.status}
                 disabled={!userCanEdit}

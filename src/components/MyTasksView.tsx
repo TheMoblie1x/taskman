@@ -2,6 +2,7 @@ import React from 'react';
 import { useApp } from '../context/AppContext';
 import { Ticket } from '../types';
 import { TicketTypeBadge, PriorityBadge } from './TicketBadge';
+import { statusColor } from '../utils/statusColor';
 import { GoogleIcon } from './GoogleIcon';
 
 export const MyTasksView: React.FC = () => {
@@ -103,7 +104,12 @@ export const MyTasksView: React.FC = () => {
                       <div className="flex items-center gap-2 text-[10px] text-slate-500">
                         <span>Project: {proj?.name || 'General'}</span>
                         <span>•</span>
-                        <span className="capitalize">{t.status.toLowerCase().replace('_', ' ')}</span>
+                        <span
+                          className={`capitalize font-semibold px-1.5 py-0.2 rounded inline-flex items-center gap-1 ${statusColor(t.status).pill}`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${statusColor(t.status).dot}`} />
+                          {t.status.toLowerCase().replace('_', ' ')}
+                        </span>
                       </div>
                     </div>
                   </div>
