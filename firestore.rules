@@ -64,6 +64,11 @@ service cloud.firestore {
       allow create: if isWorkspaceMember(request.resource.data.workspaceId);
     }
 
+    match /sprints/{sprintId} {
+      allow read, update, delete: if isWorkspaceMember(resource.data.workspaceId);
+      allow create: if isWorkspaceMember(request.resource.data.workspaceId);
+    }
+
     match /docPages/{pageId} {
       allow read, update, delete: if isWorkspaceMember(resource.data.workspaceId);
       allow create: if isWorkspaceMember(request.resource.data.workspaceId);

@@ -18,6 +18,7 @@ import { GoalDetailModal } from './components/GoalDetailModal';
 import { LoginScreen } from './components/LoginScreen';
 import { GoogleIcon } from './components/GoogleIcon';
 import { DocsView } from './components/DocsView';
+import { SprintView } from './components/SprintView';
 
 const AppContent: React.FC = () => {
   const { activeView, setActiveView, selectedTicketId } = useApp();
@@ -63,6 +64,8 @@ const AppContent: React.FC = () => {
           setActiveView('goals');
         } else if (e.key === '6') {
           setActiveView('docs');
+        } else if (e.key === '7') {
+          setActiveView('sprints');
         }
       }
     };
@@ -127,6 +130,8 @@ const AppContent: React.FC = () => {
           )}
 
           {activeView === 'docs' && <DocsView />}
+
+          {activeView === 'sprints' && <SprintView />}
         </main>
       </div>
 

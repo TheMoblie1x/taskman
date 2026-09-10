@@ -70,6 +70,25 @@ export interface PresenceEntry {
   lastSeen: string; // ISO
 }
 
+export type SprintStatus = 'planned' | 'active' | 'completed';
+
+// A time-boxed set of tickets for sprint planning. Scoped to one project; a ticket carries the
+// sprint it belongs to via `Ticket.sprintId`. Burndown/velocity are derived from ticket
+// `storyPoints` + `completedAt` (see utils/sprintMetrics), not from stored snapshots.
+export interface Sprint {
+  id: string;
+  workspaceId: string;
+  projectId: string;
+  name: string;
+  goal?: string;
+  startAt: string; // ISO date
+  endAt: string; // ISO date
+  status: SprintStatus;
+  createdBy: string;
+  createdAt: string;
+  completedAt?: string | null;
+}
+
 export interface BoardColumn {
   id: string;
   boardId: string;
@@ -156,6 +175,7 @@ export interface Ticket {
   description: string;
   type: TicketType;
   status: string;
+  sprintId?: string | null;
   priority: TicketPriority;
   reporterId: string;
   assigneeId?: string | null;
@@ -214,7 +234,7 @@ export interface AppNotification {
   createdAt: string;
 }
 
-export type ActiveView = 'kanban' | 'list' | 'calendar' | 'my-tasks' | 'goals' | 'docs' | 'settings';
+export type ActiveView = 'kanban' | 'list' | 'calendar' | 'my-tasks' | 'goals' | 'docs' | 'sprints' | 'settings';
 
 export type DensityMode = 'compact' | 'comfortable' | 'spacious';
 

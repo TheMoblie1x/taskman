@@ -39,6 +39,8 @@ import {
   GoalCheckIn,
   GoalMeasurementType,
   DocPage,
+  Sprint,
+  SprintStatus,
 } from '../types';
 import {
   INITIAL_USERS,
@@ -53,6 +55,7 @@ import {
   INITIAL_NOTIFICATION_SETTINGS,
   INITIAL_CALENDAR_SETTINGS,
   INITIAL_GOALS,
+  INITIAL_SPRINTS,
   INITIAL_DOC_PAGES,
 } from '../data/seedData';
 import { applyThemeTokensToDOM, PRESET_THEMES } from '../utils/themeTokens';
@@ -167,6 +170,15 @@ interface AppContextType {
   addGoalCheckIn: (goalId: string, data: { progressValue: number; notes: string; blockers?: string; nextStep?: string }) => void;
   linkTicketToGoal: (goalId: string, ticketId: string) => void;
   unlinkTicketFromGoal: (goalId: string, ticketId: string) => void;
+
+  // Sprints
+  sprints: Sprint[];
+  workspaceSprints: Sprint[];
+  createSprint: (data: { projectId: string; name: string; goal?: string; startAt: string; endAt: string }) => Sprint;
+  updateSprint: (sprintId: string, updates: Partial<Sprint>) => void;
+  setSprintStatus: (sprintId: string, status: SprintStatus) => void;
+  deleteSprint: (sprintId: string) => void;
+  setTicketSprint: (ticketId: string, sprintId: string | null) => void;
 
   // Docs (workspace wiki)
   docPages: DocPage[];
@@ -305,6 +317,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [presence, setPresence] = useState<PresenceEntry[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [sprints, setSprints] = useState<Sprint[]>([]);
   const [docPages, setDocPages] = useState<DocPage[]>([]);
 
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
@@ -664,6 +677,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ]);
       setTickets(INITIAL_TICKETS);
       setGoals(INITIAL_GOALS);
+      setSprints(INITIAL_SPRINTS);
       setDocPages(INITIAL_DOC_PAGES);
       setNotifications(INITIAL_NOTIFICATIONS);
       return;
@@ -692,6 +706,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           boards: INITIAL_BOARDS,
           tickets: INITIAL_TICKETS,
           goals: INITIAL_GOALS,
+          sprints: INITIAL_SPRINTS,
           docPages: INITIAL_DOC_PAGES,
           notifications: INITIAL_NOTIFICATIONS,
           shareLinks: INITIAL_SHARE_LINKS,
@@ -742,6 +757,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubMembers = repo.subscribeWorkspaceMembers(activeWorkspaceId, setWorkspaceMembers);
     const unsubTickets = repo.subscribeWorkspaceTickets(activeWorkspaceId, setTickets);
     const unsubGoals = repo.subscribeWorkspaceGoals(activeWorkspaceId, setGoals);
+    const unsubSprints = repo.subscribeWorkspaceSprints(activeWorkspaceId, setSprints);
     const unsubDocPages = repo.subscribeWorkspaceDocPages(activeWorkspaceId, setDocPages);
     const unsubNotifications = repo.subscribeWorkspaceNotifications(activeWorkspaceId, setNotifications);
     const unsubPresence = repo.subscribeWorkspacePresence(activeWorkspaceId, setPresence);
@@ -750,6 +766,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubMembers();
       unsubTickets();
       unsubGoals();
+      unsubSprints();
       unsubDocPages();
       unsubNotifications();
       unsubPresence();
@@ -821,6 +838,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const workspaceTickets = tickets.filter((t) => workspaceProjectIds.has(t.projectId));
   const workspaceNotifications = notifications.filter((n) => n.workspaceId === activeWorkspace.id);
   const workspaceGoals = goals.filter((g) => g.workspaceId === activeWorkspace.id);
+  const workspaceSprints = sprints.filter((s) => workspaceProjectIds.has(s.projectId));
   const workspaceDocPages = docPages.filter((d) => d.workspaceId === activeWorkspace.id);
 
   const activeProject = workspaceProjects.find((p) => p.id === activeProjectId) || workspaceProjects[0] || null;
@@ -1656,6 +1674,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (isFirebaseConfigured) repo.deleteGoalDoc(goalId).catch((e) => console.error('deleteGoalDoc failed:', e));
   }, []);
 
+  // ---- Sprints (sprint planning + burndown/velocity) ----
+  const createSprint = useCallback(
+    (data: { projectId: string; name: string; goal?: string; startAt: string; endAt: string }) => {
+      const now = new Date().toISOString();
+      const newSprint: Sprint = {
+        id: `sprint_${Date.now()}`,
+        workspaceId: activeWorkspace.id,
+        projectId: data.projectId,
+        name: data.name.trim(),
+        goal: data.goal?.trim() || undefined,
+        startAt: data.startAt,
+        endAt: data.endAt,
+        status: 'planned',
+        createdBy: currentUser.id,
+        createdAt: now,
+        completedAt: null,
+      };
+      setSprints((prev) => [...prev, newSprint]);
+      if (isFirebaseConfigured) repo.saveSprint(newSprint).catch((e) => console.error('saveSprint failed:', e));
+      return newSprint;
+    },
+    [activeWorkspace.id, currentUser.id]
+  );
+
+  const updateSprint = useCallback((sprintId: string, updates: Partial<Sprint>) => {
+    setSprints((prev) => prev.map((s) => (s.id === sprintId ? { ...s, ...updates } : s)));
+    if (isFirebaseConfigured)
+      repo.updateSprintDoc(sprintId, updates).catch((e) => console.error('updateSprintDoc failed:', e));
+  }, []);
+
+  const setSprintStatus = useCallback(
+    (sprintId: string, status: SprintStatus) => {
+      updateSprint(sprintId, {
+        status,
+        ...(status === 'completed' ? { completedAt: new Date().toISOString() } : {}),
+      });
+    },
+    [updateSprint]
+  );
+
+  const deleteSprint = useCallback(
+    (sprintId: string) => {
+      // Detach its tickets first so none are left pointing at a missing sprint.
+      tickets.filter((t) => t.sprintId === sprintId).forEach((t) => updateTicket(t.id, { sprintId: null }));
+      setSprints((prev) => prev.filter((s) => s.id !== sprintId));
+      if (isFirebaseConfigured) repo.deleteSprintDoc(sprintId).catch((e) => console.error('deleteSprintDoc failed:', e));
+    },
+    [tickets, updateTicket]
+  );
+
+  const setTicketSprint = useCallback(
+    (ticketId: string, sprintId: string | null) => updateTicket(ticketId, { sprintId }),
+    [updateTicket]
+  );
+
   const updateGoalProgress = useCallback(
     (goalId: string, value: number) => {
       const goal = goals.find((g) => g.id === goalId);
@@ -2109,6 +2182,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addGoalCheckIn,
         linkTicketToGoal,
         unlinkTicketFromGoal,
+        sprints,
+        workspaceSprints,
+        createSprint,
+        updateSprint,
+        setSprintStatus,
+        deleteSprint,
+        setTicketSprint,
         docPages,
         workspaceDocPages,
         createDocPage,

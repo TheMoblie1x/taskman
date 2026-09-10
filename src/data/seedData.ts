@@ -9,6 +9,7 @@ import {
   ShareLink,
   AppNotification,
   Goal,
+  Sprint,
   KanbanCardSettings,
   NotificationSettings,
   CalendarSettings,
@@ -634,6 +635,29 @@ export const INITIAL_TICKETS: Ticket[] = [
     version: 1,
   },
 ];
+
+export const INITIAL_SPRINTS: Sprint[] = [
+  {
+    id: 'sprint_and_24',
+    workspaceId: 'ws_rahul_work',
+    projectId: 'proj_android',
+    name: 'Sprint 24',
+    goal: 'BLE connection stability + Passkey biometrics polish',
+    startAt: '2026-09-01',
+    endAt: '2026-09-14',
+    status: 'active',
+    createdBy: 'usr_rahul',
+    createdAt: '2026-08-31T09:00:00.000Z',
+    completedAt: null,
+  },
+];
+
+// Local/dev seed convenience: drop a few of the Android tickets into the active sprint so the
+// Sprint view has data to chart on first run.
+const SPRINT_24_TICKET_IDS = new Set(['tkt_and_142', 'tkt_and_12', 'tkt_and_18', 'tkt_and_21', 'tkt_and_09']);
+for (const t of INITIAL_TICKETS) {
+  if (SPRINT_24_TICKET_IDS.has(t.id)) t.sprintId = 'sprint_and_24';
+}
 
 export const INITIAL_GOALS: Goal[] = [
   // --- WORK WORKSPACE GOALS ---

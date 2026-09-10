@@ -528,6 +528,35 @@ neutral slate fallback. Applied in the guest cards + guest drawer, `ListView` (d
 status select), `MyTasksView` (status pill), and `TicketDrawer` (pill beside the Status
 label). Kanban `TicketCard` deliberately skipped — a card there already sits under its column.
 
+**Sprint planning — done.** New `sprints` left-nav view (keyboard `7`), one active sprint per
+project's worth of planning plus derived charts.
+
+- `types.ts`: `Sprint` / `SprintStatus`; `Ticket.sprintId`; `ActiveView += 'sprints'`.
+- `firestoreRepository.ts`: `sprints` collection — `subscribeWorkspaceSprints` (scoped by
+  `workspaceId`), `saveSprint`, `updateSprintDoc`, `deleteSprintDoc`; added to
+  `seedFirestoreIfEmpty`.
+- `seedData.ts`: `INITIAL_SPRINTS` (one active Android "Sprint 24") + a post-array loop that
+  tags five Android tickets into it so the view has data on first run.
+- `AppContext.tsx`: `sprints` state + workspace-scoped subscription + local seed; derived
+  `workspaceSprints` (by project ids of the active workspace); `createSprint` / `updateSprint`
+  / `setSprintStatus` (planned→active→completed, stamps `completedAt`) / `deleteSprint`
+  (detaches its tickets first) / `setTicketSprint` (via `updateTicket`).
+- `utils/sprintMetrics.ts`: pure functions — `ticketPoints`/`sumPoints`, `burndown` (ideal
+  line + actual-remaining derived from each ticket's `completedAt` vs the sprint date range,
+  no snapshots; future days are `null`), `velocity` (committed vs completed points for the
+  last N finished sprints), `groupPoints` (points/count by any key — status, assignee),
+  `sprintSummary`.
+- `components/SprintCharts.tsx`: hand-rolled SVG `BurndownChart`, `VelocityChart` (grouped
+  bars), and a flex `SegmentBars`, plus a `ChartCard` wrapper. No charting dependency.
+- `components/SprintView.tsx`: toolbar (sprint picker, New sprint, **Print report** →
+  `window.print()`), summary card with point tiles + progress bar + status actions, the four
+  charts (burndown / velocity / points-by-status / points-by-assignee), and a two-column
+  planner (in-sprint list ↔ project backlog, add/remove a ticket, click to open its drawer).
+- `index.css`: `@media print` block isolating `.sprint-report` and hiding `.no-print` chrome.
+- `firestore.rules`: `sprints` gets the same `isWorkspaceMember` check as `goals`/`tickets`.
+- Story points were already editable (CreateTicketModal + TicketDrawer); the sprint view just
+  consumes them.
+
 ---
 All 6 phases from REQUIREMENTS.md are done, plus real Google Sign-In and the documentation
 portal (both above). Known open items for future work, not tracked as phases here: tightening

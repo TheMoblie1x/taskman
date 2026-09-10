@@ -19,6 +19,7 @@ export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({ isOpen, onClose 
     { key: '4', description: 'Switch to My Tasks view' },
     { key: '5', description: 'Switch to Goals view' },
     { key: '6', description: 'Switch to Docs view' },
+    { key: '7', description: 'Switch to Sprints view' },
     { key: '?', description: 'Show keyboard shortcuts' },
   ];
 

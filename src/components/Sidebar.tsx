@@ -182,6 +182,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <span>Kanban & List</span>
                 </div>
               </button>
+
+              <button
+                id="sidebar-sprints-btn"
+                onClick={() => {
+                  setActiveView('sprints');
+                  if (window.innerWidth < 768) onToggle();
+                }}
+                className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-xs font-semibold transition-colors ${
+                  activeView === 'sprints'
+                    ? 'bg-blue-50 text-blue-700'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <GoogleIcon name="sprint" size={14} className={`${activeView === 'sprints' ? 'text-blue-600' : 'text-slate-400'}`} />
+                  <span>Sprints</span>
+                </div>
+              </button>
             </nav>
           </div>
 
