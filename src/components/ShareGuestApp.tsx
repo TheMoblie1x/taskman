@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Board, ShareLink, Ticket } from '../types';
 import { isFirebaseConfigured, signInGuest } from '../lib/firebase';
 import * as repo from '../data/firestoreRepository';
+import { statusColor } from '../utils/statusColor';
 import { GoogleIcon } from './GoogleIcon';
 
 /**
@@ -38,11 +39,18 @@ const TYPE_ICON: Record<Ticket['type'], string> = {
   epic: 'bolt',
 };
 
+const formatDate = (iso?: string | null) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
 export const ShareGuestApp: React.FC<{ token: string }> = ({ token }) => {
   const [status, setStatus] = useState<Status>('loading');
   const [board, setBoard] = useState<Board | null>(null);
   const [shareLink, setShareLink] = useState<ShareLink | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isFirebaseConfigured) {
@@ -101,6 +109,13 @@ export const ShareGuestApp: React.FC<{ token: string }> = ({ token }) => {
     };
   }, [token]);
 
+  useEffect(() => {
+    if (!selectedTicketId) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setSelectedTicketId(null);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedTicketId]);
+
   const canEdit = shareLink?.permission === 'editor';
 
   const moveTicket = (ticket: Ticket, targetStatus: string) => {
@@ -134,6 +149,8 @@ export const ShareGuestApp: React.FC<{ token: string }> = ({ token }) => {
   }
 
   const columns = [...board.columns].sort((a, b) => a.position - b.position);
+  const selectedTicket = selectedTicketId ? tickets.find((t) => t.id === selectedTicketId) ?? null : null;
+  const statusName = (statusKey: string) => columns.find((c) => c.status === statusKey)?.name ?? statusKey;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -167,10 +184,19 @@ export const ShareGuestApp: React.FC<{ token: string }> = ({ token }) => {
                 </div>
                 <div className="flex-1 px-2 pb-2 space-y-2 overflow-y-auto">
                   {colTickets.map((ticket) => (
-                    <div key={ticket.id} className="bg-white border border-slate-200 rounded p-2.5 space-y-1.5 shadow-2xs">
+                    <button
+                      key={ticket.id}
+                      type="button"
+                      onClick={() => setSelectedTicketId(ticket.id)}
+                      className="w-full text-left bg-white border border-slate-200 rounded p-2.5 space-y-1.5 shadow-2xs hover:border-blue-300 hover:shadow-sm transition-all"
+                    >
                       <div className="flex items-center gap-1.5 text-slate-400">
                         <GoogleIcon name={TYPE_ICON[ticket.type]} size={13} />
                         <span className="text-[10px] font-mono">#{ticket.ticketNumber}</span>
+                        <span
+                          title={statusName(ticket.status)}
+                          className={`ml-auto w-1.5 h-1.5 rounded-full shrink-0 ${statusColor(ticket.status, statusName(ticket.status)).dot}`}
+                        />
                       </div>
                       <p className="text-xs font-medium text-slate-800 leading-snug">{ticket.title}</p>
                       <div className="flex items-center justify-between pt-0.5">
@@ -180,7 +206,11 @@ export const ShareGuestApp: React.FC<{ token: string }> = ({ token }) => {
                         {canEdit && (
                           <select
                             value={ticket.status}
-                            onChange={(e) => moveTicket(ticket, e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              moveTicket(ticket, e.target.value);
+                            }}
                             className="text-[10px] border border-slate-200 rounded px-1 py-0.5 bg-slate-50 text-slate-600"
                           >
                             {columns.map((c) => (
@@ -191,7 +221,7 @@ export const ShareGuestApp: React.FC<{ token: string }> = ({ token }) => {
                           </select>
                         )}
                       </div>
-                    </div>
+                    </button>
                   ))}
                   {colTickets.length === 0 && <p className="text-[10px] text-slate-400 text-center py-3">No tickets</p>}
                 </div>
@@ -200,6 +230,169 @@ export const ShareGuestApp: React.FC<{ token: string }> = ({ token }) => {
           })}
         </div>
       </main>
+
+      {selectedTicket && (
+        <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true">
+          <div
+            className="absolute inset-0 bg-slate-900/30"
+            onClick={() => setSelectedTicketId(null)}
+          />
+          <aside className="relative w-full max-w-md bg-white h-full shadow-2xl border-l border-slate-200 flex flex-col animate-in slide-in-from-right duration-200">
+            <div className="px-4 py-2.5 border-b border-slate-200 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-1.5 text-slate-400">
+                <GoogleIcon name={TYPE_ICON[selectedTicket.type]} size={14} />
+                <span className="text-[11px] font-mono">#{selectedTicket.ticketNumber}</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  {selectedTicket.type}
+                </span>
+              </div>
+              <button
+                onClick={() => setSelectedTicketId(null)}
+                className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded"
+                aria-label="Close"
+              >
+                <GoogleIcon name="close" size={16} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 text-sm">
+              <h2 className="font-bold text-slate-900 leading-snug">{selectedTicket.title}</h2>
+
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span
+                  className={`text-[10px] font-semibold px-1.5 py-0.5 rounded inline-flex items-center gap-1 ${
+                    statusColor(selectedTicket.status, statusName(selectedTicket.status)).pill
+                  }`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      statusColor(selectedTicket.status, statusName(selectedTicket.status)).dot
+                    }`}
+                  />
+                  {statusName(selectedTicket.status)}
+                </span>
+                <span
+                  className={`text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-50 ${PRIORITY_COLOR[selectedTicket.priority]}`}
+                >
+                  {PRIORITY_LABEL[selectedTicket.priority]} priority
+                </span>
+                {selectedTicket.labels.map((l) => (
+                  <span key={l} className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">
+                    {l}
+                  </span>
+                ))}
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Description</p>
+                <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">
+                  {selectedTicket.description?.trim() || 'No description provided.'}
+                </p>
+              </div>
+
+              {(() => {
+                const meta: [string, string][] = [];
+                const start = formatDate(selectedTicket.startAt);
+                const due = formatDate(selectedTicket.dueAt);
+                if (start) meta.push(['Start', start]);
+                if (due) meta.push(['Due', due]);
+                if (selectedTicket.estimatedEffort) meta.push(['Estimate', selectedTicket.estimatedEffort]);
+                if (selectedTicket.storyPoints != null) meta.push(['Story points', String(selectedTicket.storyPoints)]);
+                return meta.length ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    {meta.map(([k, v]) => (
+                      <div key={k} className="bg-slate-50 rounded p-2">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{k}</p>
+                        <p className="text-xs text-slate-700 font-medium">{v}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null;
+              })()}
+
+              {selectedTicket.subtasks.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Subtasks · {selectedTicket.subtasks.filter((s) => s.completed).length}/{selectedTicket.subtasks.length}
+                  </p>
+                  {selectedTicket.subtasks.map((s) => (
+                    <div key={s.id} className="flex items-center gap-1.5 text-xs text-slate-700">
+                      <GoogleIcon
+                        name={s.completed ? 'check_circle' : 'radio_button_unchecked'}
+                        size={14}
+                        className={s.completed ? 'text-emerald-500' : 'text-slate-300'}
+                      />
+                      <span className={s.completed ? 'line-through text-slate-400' : ''}>{s.title}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {selectedTicket.checklist.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Checklist · {selectedTicket.checklist.filter((c) => c.completed).length}/{selectedTicket.checklist.length}
+                  </p>
+                  {selectedTicket.checklist.map((c) => (
+                    <div key={c.id} className="flex items-center gap-1.5 text-xs text-slate-700">
+                      <GoogleIcon
+                        name={c.completed ? 'check_box' : 'check_box_outline_blank'}
+                        size={14}
+                        className={c.completed ? 'text-emerald-500' : 'text-slate-300'}
+                      />
+                      <span className={c.completed ? 'line-through text-slate-400' : ''}>{c.text}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {selectedTicket.comments.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Comments · {selectedTicket.comments.length}
+                  </p>
+                  {selectedTicket.comments.map((c) => (
+                    <div key={c.id} className="flex gap-2">
+                      <img src={c.user.avatarUrl} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-[11px] text-slate-500">
+                          <span className="font-semibold text-slate-700">{c.user.name}</span>
+                          {formatDate(c.createdAt) && <span> · {formatDate(c.createdAt)}</span>}
+                        </p>
+                        <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">{c.content}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {selectedTicket.attachments.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Attachments · {selectedTicket.attachments.length}
+                  </p>
+                  {selectedTicket.attachments.map((a) => (
+                    <a
+                      key={a.id}
+                      href={a.fileUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 text-xs text-blue-600 hover:underline"
+                    >
+                      <GoogleIcon name="attach_file" size={13} />
+                      <span className="truncate">{a.fileName}</span>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="px-4 py-2 border-t border-slate-200 text-[10px] text-slate-400 shrink-0">
+              {canEdit ? 'Shared link · you can move this task from the board' : 'View only · shared link'}
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 };
